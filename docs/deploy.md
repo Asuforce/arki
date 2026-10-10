@@ -16,7 +16,7 @@ cd frontend && npm run build && npx wrangler deploy --config dist/server/wrangle
 
 ## GitHub Actions で自動デプロイ
 
-`.github/workflows/deploy.yml` が main への push で、D1 のマイグレーション、バックエンド、フロントエンドの順にデプロイします。実際の値はリポジトリに置かず、GitHub の設定で渡します。
+`.github/workflows/deploy.yml` が main の ci が成功したあとに、D1 のマイグレーション、バックエンド、フロントエンドの順にデプロイします。実際の値はリポジトリに置かず、GitHub の設定で渡します。
 
 | 種類 | 名前 | 内容 |
 | --- | --- | --- |
