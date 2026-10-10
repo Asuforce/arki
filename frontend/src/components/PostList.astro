@@ -1,0 +1,34 @@
+---
+import type { PostSummary } from "../lib/api";
+import { formatDate } from "../lib/site";
+
+interface Props {
+  posts: PostSummary[];
+}
+const { posts } = Astro.props;
+---
+
+{
+  posts.length === 0 ? (
+    <p class="empty">まだ記事がありません。</p>
+  ) : (
+    <ul class="post-list">
+      {posts.map((post) => (
+        <li>
+          <time datetime={post.published_at}>{formatDate(post.published_at)}</time>
+          <a class="post-title" href={`/entry/${post.slug}`}>
+            {post.title}
+          </a>
+          {post.categories.length > 0 && (
+            <span class="tags">
+              {post.categories.map((c) => (
+                <a href={`/category/${encodeURIComponent(c)}`}>{c}</a>
+              ))}
+            </span>
+          )}
+          {post.excerpt && <p class="excerpt">{post.excerpt}</p>}
+        </li>
+      ))}
+    </ul>
+  )
+}

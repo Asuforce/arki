@@ -1,0 +1,21 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { listCategories } from "../../lib/api";
+
+const categories = await listCategories();
+Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
+---
+
+<Layout title="カテゴリ">
+  <h1>カテゴリ</h1>
+  <ul class="category-list">
+    {
+      categories.map((c) => (
+        <li>
+          <a href={`/category/${encodeURIComponent(c.name)}`}>{c.name}</a>
+          <span class="count">{c.count}</span>
+        </li>
+      ))
+    }
+  </ul>
+</Layout>

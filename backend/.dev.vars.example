@@ -1,0 +1,2 @@
+ADMIN_TOKEN=change-me
+CORS_ALLOW_ORIGIN=http://localhost:4321

@@ -1,0 +1,14 @@
+---
+import PostList from "../components/PostList.astro";
+import Pagination from "../components/Pagination.astro";
+import Layout from "../layouts/Layout.astro";
+import { listPosts } from "../lib/api";
+
+const { posts, page, limit, total } = await listPosts({ page: 1 });
+Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
+---
+
+<Layout>
+  <PostList posts={posts} />
+  <Pagination page={page} limit={limit} total={total} basePath="/" />
+</Layout>
