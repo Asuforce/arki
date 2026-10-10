@@ -1,5 +1,7 @@
 //! 純粋なロジック。Workers の API に依存しないので、手元の `cargo test` で確認できる。
 
+use pulldown_cmark::{Event, Options, Parser, Tag};
+
 /// 1970-01-01 からの日数を (年, 月, 日) にする。
 fn civil_from_days(z: i64) -> (i64, i64, i64) {
     let z = z + 719_468;
@@ -144,76 +146,126 @@ pub fn make_excerpt(markdown: &str, max_chars: usize) -> String {
 }
 
 /// 一覧のサムネイルにする、本文の最初の画像の URL。
-/// Markdown の `![alt](url)` と HTML の `<img src>` を見る。コードブロックの中は飛ばす。
+/// 記事ページと同じく Markdown を CommonMark として読むので、コードや `\!` で打ち消した画像、
+/// HTML コメントの中は対象にならない。HTML の `<img src>` は生の HTML からだけ読む。
 pub fn first_image_url(markdown: &str) -> Option<String> {
-    let mut body = String::new();
-    let mut in_fence = false;
-    for line in markdown.lines() {
-        if line.trim_start().starts_with("```") {
-            in_fence = !in_fence;
-        } else if !in_fence {
-            body.push_str(line);
-            body.push('\n');
+    let mut html = String::new();
+    for event in Parser::new_ext(markdown, Options::ENABLE_TABLES) {
+        match event {
+            Event::Html(text) | Event::InlineHtml(text) => html.push_str(&text),
+            other => {
+                if let Some(url) = take_html_img(&mut html) {
+                    return Some(url);
+                }
+                if let Event::Start(Tag::Image { dest_url, .. }) = other {
+                    if is_thumbnail_url(&dest_url) {
+                        return Some(dest_url.into_string());
+                    }
+                }
+            }
         }
     }
-    // 小文字化しても ASCII だけなのでバイト位置は body と一致する
-    let lower = body.to_ascii_lowercase();
-    let mut from = 0;
+    take_html_img(&mut html)
+}
+
+/// 続いた HTML の断片から、通る URL の最初の `<img src>` を取り出し、断片を空にする。
+fn take_html_img(html: &mut String) -> Option<String> {
+    let url = html_img_srcs(html).find(|u| is_thumbnail_url(u));
+    html.clear();
+    url
+}
+
+/// HTML の中の `<img>` の `src` を、現れる順に返す。コメントは飛ばす。
+/// 引用符の中の `>` でタグを閉じず、`data-src` や他の属性の値は `src` と見なさない。
+fn html_img_srcs(html: &str) -> impl Iterator<Item = String> + '_ {
+    let mut pos = 0;
+    std::iter::from_fn(move || {
+        while let Some(off) = html[pos..].find('<') {
+            let start = pos + off;
+            if html[start..].starts_with("<!--") {
+                // `<!-->` と `<!--->` も空のコメントなので、`<!` の後ろから `-->` を探す
+                let end = html[start + 2..].find("-->")?;
+                pos = start + 2 + end + 3;
+                continue;
+            }
+            let rest = &html.as_bytes()[start + 1..];
+            if !rest.first().is_some_and(u8::is_ascii_alphabetic) {
+                pos = start + 1;
+                continue;
+            }
+            let name_len = rest
+                .iter()
+                .position(|&b| b.is_ascii_whitespace() || b == b'/' || b == b'>')
+                .unwrap_or(rest.len());
+            let is_img = rest[..name_len].eq_ignore_ascii_case(b"img");
+            let (end, src) = read_attributes(html, start + 1 + name_len, is_img)?;
+            pos = end;
+            if let Some(src) = src {
+                return Some(src);
+            }
+        }
+        None
+    })
+}
+
+/// `from` から始まる属性を、タグを閉じる `>` まで読む。閉じる前に終わったら `None`。
+/// 返すのは `>` の次の位置と、`want_src` のときの最初の `src` の値。
+fn read_attributes(html: &str, from: usize, want_src: bool) -> Option<(usize, Option<String>)> {
+    let b = html.as_bytes();
+    let mut i = from;
+    let mut src = None;
     loop {
-        let md = body[from..].find("![").map(|p| p + from);
-        let html = lower[from..].find("<img").map(|p| p + from);
-        let (start, is_html) = match (md, html) {
-            (None, None) => return None,
-            (Some(m), Some(h)) if h < m => (h, true),
-            (Some(m), _) => (m, false),
-            (None, Some(h)) => (h, true),
-        };
-        let url = if is_html {
-            html_img_src(&body[start..], &lower[start..])
-        } else {
-            markdown_image_url(&body[start..])
-        };
-        if let Some(url) = url.filter(|u| is_thumbnail_url(u)) {
-            return Some(url);
+        while i < b.len() && (b[i].is_ascii_whitespace() || b[i] == b'/') {
+            i += 1;
         }
-        from = start + 1;
-    }
-}
-
-/// `![alt](url "title")` の url。`s` は `![` から始まる。
-fn markdown_image_url(s: &str) -> Option<String> {
-    let rest = &s[s.find("](")? + 2..];
-    let inner = &rest[..rest.find(')')?];
-    inner.split_whitespace().next().map(str::to_string)
-}
-
-/// `<img ... src="url">` の url。`s` は `<img` から始まり、`lower` はその小文字版。
-fn html_img_src(s: &str, lower: &str) -> Option<String> {
-    let after = lower.as_bytes().get(4)?;
-    if after.is_ascii_alphanumeric() {
-        return None;
-    }
-    let end = s.find('>')?;
-    let (tag, tag_lower) = (&s[..end], &lower[..end]);
-    for (pos, _) in tag_lower.match_indices("src") {
-        let preceded = tag.as_bytes()[pos - 1];
-        if !(preceded.is_ascii_whitespace() || preceded == b'"' || preceded == b'\'') {
+        match *b.get(i)? {
+            b'>' => return Some((i + 1, src)),
+            b'=' => i += 1,
+            _ => {}
+        }
+        let name_start = i;
+        while i < b.len() && !(b[i].is_ascii_whitespace() || matches!(b[i], b'/' | b'>' | b'=')) {
+            i += 1;
+        }
+        let name = &b[name_start..i];
+        while i < b.len() && b[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if b.get(i) != Some(&b'=') {
             continue;
         }
-        let Some(value) = tag[pos + 3..].trim_start().strip_prefix('=') else {
-            continue;
+        i += 1;
+        while i < b.len() && b[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        let (value_start, value_end) = match *b.get(i)? {
+            q @ (b'"' | b'\'') => {
+                let start = i + 1;
+                let end = start + b[start..].iter().position(|&c| c == q)?;
+                i = end + 1;
+                (start, end)
+            }
+            _ => {
+                let start = i;
+                while i < b.len() && !(b[i].is_ascii_whitespace() || b[i] == b'>') {
+                    i += 1;
+                }
+                (start, i)
+            }
         };
-        let value = value.trim_start();
-        return match value.chars().next()? {
-            q @ ('"' | '\'') => value[1..].split(q).next().map(str::to_string),
-            _ => value.split_whitespace().next().map(str::to_string),
-        };
+        if want_src && src.is_none() && name.eq_ignore_ascii_case(b"src") {
+            src = Some(html[value_start..value_end].replace("&amp;", "&"));
+        }
     }
-    None
 }
 
-/// 絶対の http(s) か、サイト内の `/` 始まりのパスだけ通す。`//host` は別オリジンなので落とす。
+/// 記事ページが `img` の `src` として描画する URL だけ通す。
+/// 絶対の http(s) か、サイト内の `/` 始まりのパスで、`//host` は通さない。
+/// ブラウザは URL の改行や tab を取り除くので、空白と制御文字を含むものも落とす。
 fn is_thumbnail_url(url: &str) -> bool {
+    if url.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return false;
+    }
     let lower = url.to_ascii_lowercase();
     lower.starts_with("http://")
         || lower.starts_with("https://")
@@ -365,6 +417,127 @@ mod tests {
             first_image_url("![x](data:image/png;base64,AAAA)\n![y](/ok.png)").as_deref(),
             Some("/ok.png")
         );
+    }
+
+    #[test]
+    fn thumbnail_unclosed_marker_does_not_borrow_later_link() {
+        assert_eq!(
+            first_image_url("Use ![ for images. See [docs](https://example.com/page)"),
+            None
+        );
+        assert_eq!(
+            first_image_url("![logo][ref]\n\n[home](https://example.com/)"),
+            None
+        );
+        assert_eq!(
+            first_image_url("![logo][ref]\n\n[ref]: /logo.png").as_deref(),
+            Some("/logo.png")
+        );
+    }
+
+    #[test]
+    fn thumbnail_skips_code() {
+        let after = "\n\n![y](/out.png)";
+        for code in [
+            "`![x](/in.png)`",
+            "~~~\n![x](/in.png)\n~~~",
+            "    ![x](/in.png)",
+            "````\n```\n![x](/in.png)\n```\n````",
+            "<!-- ![x](/in.png) -->",
+        ] {
+            assert_eq!(
+                first_image_url(&format!("{code}{after}")).as_deref(),
+                Some("/out.png"),
+                "{code}"
+            );
+            assert_eq!(first_image_url(code), None, "{code}");
+        }
+    }
+
+    #[test]
+    fn thumbnail_skips_commented_html() {
+        let out = "<img src=\"/out.png\">";
+        for comment in [
+            "<!-- <img src=\"/in.png\"> -->",
+            "<!--\n<img src=\"/in.png\">\n-->",
+            "text <!-- <img src=\"/in.png\"> --> text",
+            "<!--\nnote\n-->\n<!-- <img src=\"/in.png\"> -->",
+        ] {
+            assert_eq!(first_image_url(comment), None, "{comment}");
+            assert_eq!(
+                first_image_url(&format!("{comment}\n\n{out}")).as_deref(),
+                Some("/out.png"),
+                "{comment}"
+            );
+        }
+    }
+
+    #[test]
+    fn thumbnail_skips_escaped_marker() {
+        assert_eq!(first_image_url("\\![x](/a.png)"), None);
+    }
+
+    #[test]
+    fn thumbnail_keeps_parentheses_in_url() {
+        assert_eq!(
+            first_image_url("![x](https://en.wikipedia.org/wiki/Foo_(bar).png)").as_deref(),
+            Some("https://en.wikipedia.org/wiki/Foo_(bar).png")
+        );
+    }
+
+    #[test]
+    fn thumbnail_rejects_whitespace_and_control_chars() {
+        for url in [
+            "/\n/evil.example/a.png",
+            "/\t/evil.example/a.png",
+            "/a\u{0}.png",
+            "/a b.png",
+        ] {
+            assert!(!is_thumbnail_url(url), "{url:?}");
+            assert_eq!(
+                first_image_url(&format!("<img src=\"{url}\">")),
+                None,
+                "{url:?}"
+            );
+        }
+        assert_eq!(
+            first_image_url("<img src=\"/\n/evil.example/a.png\"> ![y](/ok.png)").as_deref(),
+            Some("/ok.png")
+        );
+    }
+
+    #[test]
+    fn thumbnail_html_attributes_are_read_per_tag() {
+        let cases = [
+            ("<img alt=\"a>b\" src=\"/a.png\">", Some("/a.png")),
+            ("<img data-src=\"/no.png\" src=\"/a.png\">", Some("/a.png")),
+            ("<img data-src=\"/no.png\">", None),
+            ("<img alt=\"a src=/no.png\">", None),
+            ("<img alt='x' src=/a.png>", Some("/a.png")),
+            (
+                "<a title=\"<img src='/no.png'>\"><img src=\"/a.png\"></a>",
+                Some("/a.png"),
+            ),
+            ("<div>\n<img src=\"/a.png\">\n</div>", Some("/a.png")),
+            ("<img src=\"/a.png", None),
+            ("<img src=\"/a.png?x=1&amp;y=2\">", Some("/a.png?x=1&y=2")),
+        ];
+        for (md, want) in cases {
+            assert_eq!(first_image_url(md).as_deref(), want, "{md}");
+        }
+    }
+
+    #[test]
+    fn thumbnail_scales_linearly() {
+        let start = std::time::Instant::now();
+        assert_eq!(first_image_url(&"![".repeat(50_000)), None);
+        assert_eq!(first_image_url(&"<img ".repeat(50_000)), None);
+        assert_eq!(
+            first_image_url(&format!("<div>\n{}", "<img ".repeat(50_000))),
+            None
+        );
+        assert_eq!(first_image_url(&"<!-- ".repeat(50_000)), None);
+        assert!(start.elapsed().as_secs_f64() < 2.0, "{:?}", start.elapsed());
     }
 
     #[test]

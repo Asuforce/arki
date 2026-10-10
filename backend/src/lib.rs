@@ -546,3 +546,35 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
     };
     with_cors(response, &env)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn row(content: &str) -> PostSummaryRow {
+        PostSummaryRow {
+            id: 1,
+            slug: "2019/11/23/031344".into(),
+            title: "t".into(),
+            content: content.into(),
+            excerpt: "e".into(),
+            status: "published".into(),
+            published_at: "2019-11-22T18:13:44Z".into(),
+        }
+    }
+
+    #[test]
+    fn summary_has_thumbnail_but_not_content() {
+        let value =
+            serde_json::to_value(PostSummary::from(row("本文\n\n![a](/img/a.png)"))).unwrap();
+        let object = value.as_object().unwrap();
+        assert_eq!(object["thumbnail"], "/img/a.png");
+        assert!(!object.contains_key("content"));
+    }
+
+    #[test]
+    fn summary_thumbnail_is_null_without_image() {
+        let value = serde_json::to_value(PostSummary::from(row("画像なし"))).unwrap();
+        assert!(value.as_object().unwrap()["thumbnail"].is_null());
+    }
+}
