@@ -43,6 +43,27 @@
 - 本文に `<!-- toc -->` があれば、`h2` / `h3` の目次に置き換えます。見出しには `h-1` のような id が付きます。
 - `<a class="link-card">` はブログカードとして表示します。
 
+## 見た目
+
+色、フォント、角丸と影を持たない形は共有パッケージ `@asuforce/tintwork` のトークンに従い、テーマはダークとライトです。本文（`.post-body`）の読みやすさを最優先にし、装飾は本文に重ねません。表示の言語は日本語のままです。
+
+- テーマ: `Layout.astro` の inline script が、`localStorage` の `theme`、OS の設定、ダークの順に決めて `<html data-theme>` に付けます。ナビ右端のボタンで切り替えると `localStorage` に残し、`theme-color` も更新します。
+- 星: 固定乱数の 190 個を、画面に固定した canvas に描きます。数、大きさ、明るさは official と同じで、テーマが変わると `--star` と `--star-a` で色を引き直します。ライトでは黒、不透明度は 0.55 倍です。`main`、ヘッダー、フッターは星より前面です。
+- ゴースト: 画面幅が 1000px 以上のときだけ、本文の列の右の余白の中央に幅 72px で固定表示します。1000px 未満はヘッダーのサイト名の左に 28px の静止した姿を置き、どちらか一方だけを出します。位置と瞳の向きはスクロールの進み具合で決め、どこにも着地しません。動きを減らす設定では、漂いと位置の追従を止めます。
+- 見出し: ヘッダーのサイト名、h1、ページ送り、日付、タグのラベルは、大文字の D-DIN（太さ 700）で字間を持たせます。本文の見出しは大文字にしません。
+
+```mermaid
+flowchart LR
+  S["scrollY / (scrollHeight - innerHeight)<br/>= 進み具合 0..1"] --> Y["ghostTop<br/>ナビの下 → 画面下端の 32px 上"]
+  S --> R["readingGaze<br/>上端は上、半ばは正面、下端は下"]
+  C["カーソルとの距離<br/>360px 以内ほど優先"] --> G["gaze"]
+  R --> G
+  Y --> E["transform"]
+  G --> P["--gx / --gy<br/>瞳の位置"]
+```
+
+計算は `frontend/src/lib/world.ts` の純粋な関数で、`frontend/test/world.test.ts` が検証します。DOM に触る部分は `frontend/src/scripts/world.ts` です。ページが画面に収まるときは進み具合が 0 のままで、ゴーストは上の位置に留まります。
+
 ## 一覧の抜粋
 
 `excerpt` は書き込み時に作ります（HTML タグと Markdown の記号を除いた先頭 120 文字）。規則は `backend/src/util.rs` の `make_excerpt` と `tools/text.ts` の `makeExcerpt` で同じです。
