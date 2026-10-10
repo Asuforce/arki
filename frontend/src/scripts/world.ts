@@ -9,7 +9,7 @@ function initTheme(): void {
 
   const apply = (theme: Theme): void => {
     root.setAttribute("data-theme", theme);
-    toggle?.setAttribute("aria-label", theme === "dark" ? "ライトテーマに切り替え" : "ダークテーマに切り替え");
+    toggle?.setAttribute("aria-label", theme === "dark" ? "Switch to light theme" : "Switch to dark theme");
     meta?.setAttribute("content", getComputedStyle(document.body).backgroundColor);
     window.dispatchEvent(new Event("themechange"));
   };
