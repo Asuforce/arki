@@ -1,4 +1,5 @@
-import { GHOST_W, gaze, ghostTop, ghostX, makeStars, scrollProgress, WIDE_MIN } from "../lib/world";
+import { makeStars } from "../lib/world";
+import { initGhost } from "./ghost";
 
 type Theme = "light" | "dark";
 
@@ -63,59 +64,6 @@ function initStars(): void {
   );
   window.addEventListener("themechange", draw);
   draw();
-}
-
-const PUPIL_REACH = 8;
-
-function initGhost(): void {
-  const ghost = document.querySelector<HTMLElement>(".ghost-float");
-  if (!ghost) return;
-
-  const wide = window.matchMedia(`(min-width: ${WIDE_MIN}px)`);
-  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const finePointer = window.matchMedia("(pointer: fine) and (prefers-reduced-motion: no-preference)");
-  let pointer: { x: number; y: number } | null = null;
-  let frame = 0;
-
-  const update = (): void => {
-    frame = 0;
-    if (!wide.matches) return;
-    const root = document.documentElement;
-    const maxScroll = root.scrollHeight - window.innerHeight;
-    const progress = scrollProgress(window.scrollY, maxScroll);
-    const h = ghost.offsetHeight;
-    // 動きを減らす設定では位置を追従させず、上の位置に留める。視線だけは進み具合に合わせる
-    const top = ghostTop(reduced.matches ? 0 : progress, window.innerHeight, h);
-    const x = ghostX(root.clientWidth);
-    ghost.style.transform = `translate(${x - GHOST_W / 2}px, ${top}px)`;
-
-    const cursor =
-      pointer && finePointer.matches ? { dx: pointer.x - x, dy: pointer.y - (top + h / 2) } : null;
-    const eyes = gaze(progress, cursor, PUPIL_REACH);
-    ghost.style.setProperty("--gx", eyes.x.toFixed(2));
-    ghost.style.setProperty("--gy", eyes.y.toFixed(2));
-    ghost.dataset.ready = "";
-  };
-
-  const schedule = (): void => {
-    if (!frame) frame = requestAnimationFrame(update);
-  };
-
-  window.addEventListener("scroll", schedule, { passive: true });
-  window.addEventListener("resize", schedule, { passive: true });
-  window.addEventListener(
-    "pointermove",
-    (e) => {
-      pointer = { x: e.clientX, y: e.clientY };
-      schedule();
-    },
-    { passive: true },
-  );
-  wide.addEventListener("change", schedule);
-  reduced.addEventListener("change", schedule);
-  // 画像の読み込みなどでページの長さが変わると、進み具合も変わる
-  new ResizeObserver(schedule).observe(document.body);
-  update();
 }
 
 export function initWorld(): void {

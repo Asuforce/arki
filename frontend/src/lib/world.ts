@@ -33,43 +33,8 @@ export const WIDE_MIN = 1000;
 export const GHOST_W = 72;
 export const GHOST_ASPECT = 392 / 439;
 export const NAV_H = 56;
-const TOP_GAP = 16;
-const BOTTOM_GAP = 32;
-
-const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
 
 export function ghostX(width: number): number {
   const columnRight = (width + COLUMN_W) / 2;
   return (columnRight + width) / 2;
-}
-
-export function scrollProgress(scrollY: number, maxScroll: number): number {
-  if (maxScroll <= 0) return 0;
-  return clamp01(scrollY / maxScroll);
-}
-
-export function ghostTop(progress: number, viewportH: number, ghostH: number): number {
-  const from = NAV_H + TOP_GAP;
-  const to = Math.max(from, viewportH - BOTTOM_GAP - ghostH);
-  return from + (to - from) * clamp01(progress);
-}
-
-export interface Gaze {
-  x: number;
-  y: number;
-}
-
-export function readingGaze(progress: number, reach: number): Gaze {
-  return { x: 0, y: (2 * clamp01(progress) - 1) * reach };
-}
-
-export const CURSOR_NEAR = 360;
-
-export function gaze(progress: number, cursor: { dx: number; dy: number } | null, reach: number): Gaze {
-  const reading = readingGaze(progress, reach);
-  if (!cursor) return reading;
-  const len = Math.hypot(cursor.dx, cursor.dy) || 1;
-  const w = clamp01(1 - len / CURSOR_NEAR);
-  const toward = { x: (cursor.dx / len) * reach, y: (cursor.dy / len) * reach };
-  return { x: reading.x + (toward.x - reading.x) * w, y: reading.y + (toward.y - reading.y) * w };
 }

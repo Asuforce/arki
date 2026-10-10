@@ -32,7 +32,16 @@
 .ghost-float { display: none; }
 .ghost-pupil {
   transform: translate(calc(var(--gx, 0) * 1px), calc(var(--gy, 0) * 1px));
+  transform-box: fill-box;
+  transform-origin: center;
   transition: transform 350ms var(--ease);
+}
+
+/* 漂いの振幅は --float (0 から 1) に比例する。止まっているときだけ 1 にして、動いている間は弱める */
+@property --float {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
 }
 
 @media (min-width: 1000px) {
@@ -45,18 +54,35 @@
     width: var(--ghost-w);
     opacity: 0;
     pointer-events: none;
+    transition: --float 800ms var(--ease);
   }
-  .ghost-float[data-ready] { opacity: 1; }
-  .ghost-float svg { animation: drift 5s ease-in-out infinite; }
+  /* 位置は JS が transform に書くので、登場は translate で重ねる */
+  .ghost-float[data-ready] { animation: ghost-enter 700ms var(--ease) both; }
+  /* 周期の違う 2 つの上下を重ねて、単調な往復に見せない */
+  .ghost-float svg {
+    animation:
+      ghost-bob 6.4s ease-in-out infinite,
+      ghost-bob-fine 4.3s ease-in-out infinite;
+  }
 }
 
 @media (max-width: 999.98px) {
   .ghost-mark { display: block; }
 }
 
-@keyframes drift {
-  0%, 100% { transform: translateY(0) rotate(-3deg); }
-  50% { transform: translateY(-5px) rotate(3deg); }
+@keyframes ghost-enter {
+  from { opacity: 0; translate: 0 28px; }
+  to { opacity: 1; translate: 0 0; }
+}
+
+@keyframes ghost-bob {
+  0%, 100% { translate: 0 calc(var(--float) * -2.2px); }
+  50% { translate: 0 calc(var(--float) * 2.2px); }
+}
+
+@keyframes ghost-bob-fine {
+  0%, 100% { transform: translateY(calc(var(--float) * 1.2px)); }
+  50% { transform: translateY(calc(var(--float) * -1.2px)); }
 }
 
 .theme-toggle {
@@ -79,6 +105,7 @@
 :root[data-theme="light"] .icon-sun { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  .ghost-float svg { animation: none; }
+  .ghost-float { opacity: 1; }
+  .ghost-float[data-ready], .ghost-float svg { animation: none; }
   .ghost-pupil { transition: none; }
 }
