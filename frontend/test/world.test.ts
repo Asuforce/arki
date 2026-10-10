@@ -25,3 +25,14 @@ test("ゴーストは本文の列の右の余白の中央にいて、本文に�
     assert.ok(x + GHOST_W / 2 < w, `${w}px で画面に収まる`);
   }
 });
+
+test("左の中立位置は右の鏡で、本文の列の左の余白の中央にいる", () => {
+  for (const w of [1000, 1280, 1920]) {
+    const columnLeft = (w - COLUMN_W) / 2;
+    const x = ghostX(w, "left");
+    assert.equal(x, w - ghostX(w, "right"));
+    assert.equal(columnLeft - x, x - 0);
+    assert.ok(x + GHOST_W / 2 < columnLeft && x - GHOST_W / 2 > 0);
+  }
+  assert.equal(ghostX(1280), ghostX(1280, "right"));
+});

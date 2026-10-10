@@ -5,30 +5,49 @@ import {
   BAND_TOP_GAP,
   BLINK_MAX_MS,
   BLINK_MIN_MS,
+  CROSS_ARC_PX,
+  CROSS_COOLDOWN_MS,
+  CROSS_SIDES_MIN_WIDTH,
   CURSOR_NEAR,
+  EDGE_GAP,
   MAX_DT,
   POSES,
   READ_LINE,
   SPRINGS,
+  SWAY_AMP,
+  SWAY_CYCLES,
   TILT_MAX,
+  TILT_X_MAX,
+  X_GAIN_MAX,
   atRest,
   band,
   bandY,
   blinkDelay,
   clampToBand,
+  arcLift,
+  crossProgress,
   gaze,
+  halfExtent,
   listY,
+  mirrorPose,
   pickArticleBlock,
   pickListBlock,
   poseAt,
   readLine,
+  resolveSide,
   sectionProgress,
+  sideForBlock,
   springStep,
+  swayX,
+  tiltFromHorizontalVelocity,
   tiltFromVelocity,
+  xRoom,
+  xTarget,
+  type SideState,
   type Spring,
   type SpringParams,
 } from "../src/lib/ghost.ts";
-import { GHOST_ASPECT, GHOST_W, NAV_H } from "../src/lib/world.ts";
+import { COLUMN_W, GHOST_ASPECT, GHOST_W, NAV_H, ghostX, type Side } from "../src/lib/world.ts";
 
 const DT = 1 / 60;
 
@@ -201,11 +220,13 @@ test("姿勢の値は範囲内で、本文のある左を向き、隣り合う�
   const n = POSES.length;
   for (let i = 0; i < n; i++) {
     const p = POSES[i];
+    const next = POSES[(i + 1) % n];
     assert.ok(p.scale >= 0.9 && p.scale <= 1.1, `scale ${i}`);
     assert.ok(Math.abs(p.tilt) <= 10, `tilt ${i}`);
+    assert.ok(Math.abs(p.x) <= 26, `x ${i}`);
+    assert.ok(Math.abs(p.x - next.x) >= 16, `${i} と次の横ずれが近すぎる`);
     assert.ok(p.gaze.x < 0, `gaze.x ${i} は左向き`);
     assert.ok(Math.hypot(p.gaze.x, p.gaze.y) <= 9, `gaze ${i} は目の中に収まる`);
-    const next = POSES[(i + 1) % n];
     assert.ok(Math.abs(p.tilt - next.tilt) >= 6, `${i} と次の傾きが近すぎる`);
     const differs =
       Math.abs(p.scale - next.scale) >= 0.04 || Math.hypot(p.gaze.x - next.gaze.x, p.gaze.y - next.gaze.y) >= 2;
@@ -236,4 +257,160 @@ test("まばたきの間隔は 3 秒から 7 秒で、何度引いても同じ�
   const mean = seq.reduce((a, b) => a + b, 0) / seq.length;
   assert.ok(Math.abs(mean - 5000) < 400, `平均 ${mean} は範囲の中ほど`);
   assert.ok(Math.min(...seq) < 3600 && Math.max(...seq) > 6400, "範囲の端まで使う");
+});
+
+const WIDTHS = [985, 1000, 1100, 1199, 1200, 1280, 1600, 1920];
+const SIDES: Side[] = ["right", "left"];
+
+test("横のバネは、行き過ぎが小さく、2 秒以内に静止する", () => {
+  const { peak, s, settledAt } = run(100, SPRINGS.x, 3);
+  assert.ok(peak > 100 && peak < 106, `行き過ぎ ${peak}`);
+  assert.ok(atRest(s, 100));
+  assert.ok(settledAt < 2, `収束時間 ${settledAt}s`);
+});
+
+test("落ち葉: 節の中で 1.5 往復し、振れ幅は SWAY_AMP を超えず、始まりの位相は節ごとに違う", () => {
+  for (const block of [0, 1, 5]) {
+    let crossings = 0;
+    let prev = swayX(0, block);
+    for (let i = 1; i <= 1000; i++) {
+      const v = swayX(i / 1000, block);
+      assert.ok(Math.abs(v) <= SWAY_AMP + 1e-9);
+      if (prev * v < 0) crossings++;
+      prev = v;
+    }
+    assert.ok(crossings >= 2 && crossings <= 4, `1.5 往復は半周期 3 つ分で、ゼロ交差は 2 から 4 (${crossings})`);
+    assert.ok(Math.abs(swayX(1 / SWAY_CYCLES, block) - swayX(0, block)) < 1e-9, "周期は節の 2/3");
+  }
+  const starts = POSES.map((_, b) => swayX(0, b));
+  for (let b = 0; b < POSES.length; b++) {
+    assert.ok(Math.abs(starts[b] - starts[(b + 1) % POSES.length]) > 5, `${b} と次の節で揺れの始まりが近い`);
+  }
+  assert.equal(swayX(0, 3), swayX(0, 3 + POSES.length), "表の長さで巡る");
+  assert.equal(swayX(-1, 2), swayX(0, 2), "範囲外の進み具合は端に張りつく");
+});
+
+test("可動範囲: 余白から傾いた見かけの幅と隙間を引いた分で、広い画面ほど大きく、狭ければ 0", () => {
+  const flat = { x: 0, tilt: 0, scale: 1, gaze: { x: 0, y: 0 } };
+  assert.equal(halfExtent(flat), GHOST_W / 2);
+  assert.ok(halfExtent({ ...flat, tilt: 9 }) > halfExtent(flat), "傾くと見かけの幅が広がる");
+  assert.equal(xRoom(1000, flat), 60 - 36 - EDGE_GAP);
+  assert.equal(xRoom(1280, flat), 130 - 36 - EDGE_GAP);
+  assert.equal(xRoom(1600, flat), 210 - 36 - EDGE_GAP);
+  assert.ok(xRoom(1000, flat) < xRoom(1280, flat) && xRoom(1280, flat) < xRoom(1600, flat));
+  assert.equal(xRoom(800, flat), 0, "余白が見かけの幅より狭いなら 0");
+  assert.ok(xRoom(1000, { ...flat, scale: 1.1 }) < xRoom(1000, flat), "大きい姿勢ほど狭い");
+});
+
+test("x の目標は、どの幅、側、ブロック、進み具合でも、傾いた見かけの幅が余白の中に隙間つきで収まる", () => {
+  for (const width of WIDTHS) {
+    const columnLeft = (width - COLUMN_W) / 2;
+    const columnRight = (width + COLUMN_W) / 2;
+    for (const side of SIDES) {
+      for (let block = 0; block < POSES.length * 2; block++) {
+        const half = halfExtent(POSES[block % POSES.length]);
+        for (let i = 0; i <= 50; i++) {
+          const x = xTarget(width, side, block, i / 50);
+          const gapToColumn = side === "right" ? x - half - columnRight : columnLeft - (x + half);
+          const gapToEdge = side === "right" ? width - (x + half) : x - half;
+          const msg = `${width}px ${side} block ${block} progress ${i / 50}`;
+          assert.ok(gapToColumn >= EDGE_GAP - 1e-6 || xRoom(width, POSES[block % POSES.length]) === 0, `列との隙間 ${gapToColumn} ${msg}`);
+          assert.ok(gapToEdge >= EDGE_GAP - 1e-6 || xRoom(width, POSES[block % POSES.length]) === 0, `端との隙間 ${gapToEdge} ${msg}`);
+        }
+      }
+    }
+  }
+});
+
+test("x の目標: 幅 1000px ではわずかしか動かず、広いほど動く。一覧には揺れが無い", () => {
+  const spread = (width: number) => {
+    const xs = Array.from({ length: 101 }, (_, i) => xTarget(width, "right", 1, i / 100));
+    return Math.max(...xs) - Math.min(...xs);
+  };
+  assert.ok(spread(1000) < 12, `1000px で ${spread(1000)}`);
+  assert.ok(spread(1280) > 30, `1280px で ${spread(1280)}`);
+  assert.ok(spread(1600) >= spread(1280));
+  assert.ok(spread(1600) <= 2 * SWAY_AMP * X_GAIN_MAX + 1e-6);
+  assert.equal(xTarget(1280, "right", 4, null), ghostX(1280) + POSES[4].x * Math.min(X_GAIN_MAX, xRoom(1280, POSES[4]) / (26 + SWAY_AMP)));
+});
+
+test("左の目標は右の鏡で、中立位置は余白の中央どうしの対称", () => {
+  for (const width of [1200, 1280, 1600]) {
+    for (let block = 0; block < POSES.length; block++) {
+      for (const p of [0, 0.3, 0.8]) {
+        const r = xTarget(width, "right", block, p);
+        const l = xTarget(width, "left", block, p);
+        assert.ok(Math.abs(r - ghostX(width, "right") + (l - ghostX(width, "left"))) < 1e-9, "ずれは符号だけ反転");
+      }
+    }
+    assert.equal(ghostX(width, "left"), width - ghostX(width, "right"));
+  }
+});
+
+test("側は偶数番目が右、奇数番目が左。1200px 未満は常に右", () => {
+  assert.equal(CROSS_SIDES_MIN_WIDTH, 1200);
+  for (let b = 0; b < 10; b++) {
+    assert.equal(sideForBlock(b, 1280), b % 2 === 0 ? "right" : "left");
+    assert.equal(sideForBlock(b, 1200), b % 2 === 0 ? "right" : "left");
+    assert.equal(sideForBlock(b, 1199), "right");
+    assert.equal(sideForBlock(b, 1000), "right");
+  }
+});
+
+test("側の切り替えは前回から 600ms 以上たった後だけで、断られても時刻は動かない", () => {
+  const first: SideState = { side: "right", switchedAt: -Infinity };
+  const a = resolveSide(first, "left", 0);
+  assert.deepEqual(a, { side: "left", switchedAt: 0 }, "最初の切り替えはすぐ通る");
+  assert.equal(resolveSide(a, "right", CROSS_COOLDOWN_MS - 1), a, "599ms では戻れない");
+  assert.deepEqual(resolveSide(a, "right", CROSS_COOLDOWN_MS), { side: "right", switchedAt: CROSS_COOLDOWN_MS });
+  assert.equal(resolveSide(a, "left", 5), a, "同じ側なら何もしない");
+  assert.equal(resolveSide(a, "left", 100000), a, "同じ側なら時刻も動かない");
+});
+
+test("速い切り替えが続いても、側の変更は 600ms あき、静まれば望む側に追いつく", () => {
+  let st: SideState = { side: "right", switchedAt: -Infinity };
+  const switches: number[] = [];
+  for (let t = 0; t <= 3000; t += 16) {
+    const block = t < 2000 ? Math.floor(t / 100) : 20;
+    const next = resolveSide(st, sideForBlock(block, 1280), t);
+    if (next.side !== st.side) switches.push(t);
+    st = next;
+  }
+  assert.ok(switches.length >= 3);
+  for (let i = 1; i < switches.length; i++) assert.ok(switches[i] - switches[i - 1] >= CROSS_COOLDOWN_MS);
+  assert.equal(st.side, sideForBlock(20, 1280), "止まれば、ブロックの偶奇の側に落ち着く");
+});
+
+test("左の姿勢は右の鏡: 視線 x、傾き、横ずれの符号が反転し、大きさと視線 y は同じ", () => {
+  for (const p of POSES) {
+    assert.equal(mirrorPose(p, "right"), p);
+    const m = mirrorPose(p, "left");
+    assert.equal(m.tilt, -p.tilt);
+    assert.equal(m.gaze.x, -p.gaze.x);
+    assert.equal(m.x, -p.x);
+    assert.equal(m.gaze.y, p.gaze.y);
+    assert.equal(m.scale, p.scale);
+    assert.ok(m.gaze.x > 0, "左に立つときは本文の側 (右) を向く");
+    assert.deepEqual(mirrorPose(m, "left"), p, "2 回で元に戻る");
+  }
+});
+
+test("横の速度の傾きは進む向きに傾き、上限で止まる", () => {
+  assert.equal(tiltFromHorizontalVelocity(0), 0);
+  assert.ok(tiltFromHorizontalVelocity(300) > 0, "右へ動くと右へ傾く");
+  assert.equal(tiltFromHorizontalVelocity(-300), -tiltFromHorizontalVelocity(300));
+  assert.equal(tiltFromHorizontalVelocity(1e6), TILT_X_MAX);
+  assert.equal(tiltFromHorizontalVelocity(-1e6), -TILT_X_MAX);
+});
+
+test("渡りの弧は、出発と到着で 0、中ほどで最も高く、上向き", () => {
+  assert.equal(crossProgress(100, 900, 100), 0);
+  assert.equal(crossProgress(100, 900, 500), 0.5);
+  assert.equal(crossProgress(900, 100, 500), 0.5, "左へ渡るときも同じ");
+  assert.equal(crossProgress(100, 900, 2000), 1);
+  assert.equal(crossProgress(5, 5, 5), 1, "距離 0 で割らない");
+  assert.ok(Math.abs(arcLift(0)) < 1e-9);
+  assert.ok(Math.abs(arcLift(1)) < 1e-9);
+  assert.equal(arcLift(0.5), -CROSS_ARC_PX);
+  assert.ok(arcLift(0.25) > arcLift(0.5) && arcLift(0.25) < 0);
 });

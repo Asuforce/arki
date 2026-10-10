@@ -34,7 +34,15 @@ export const GHOST_W = 72;
 export const GHOST_ASPECT = 392 / 439;
 export const NAV_H = 56;
 
-export function ghostX(width: number): number {
+export type Side = "right" | "left";
+
+/** 中立位置 (ゴーストの中心の x)。余白の中央で、左は右の鏡。 */
+export function ghostX(width: number, side: Side = "right"): number {
   const columnRight = (width + COLUMN_W) / 2;
-  return (columnRight + width) / 2;
+  const right = (columnRight + width) / 2;
+  return side === "right" ? right : width - right;
+}
+
+export function marginWidth(width: number): number {
+  return Math.max(0, (width - COLUMN_W) / 2);
 }
