@@ -1,0 +1,17 @@
+name = "arki-api"
+main = "build/worker/shim.mjs"
+compatibility_date = "2024-09-23"
+
+[build]
+command = "cargo install -q worker-build@^0.8 && worker-build --release"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "arki-db"
+database_id = "<YOUR_D1_DATABASE_ID>"
+migrations_dir = "migrations"
+
+[vars]
+CORS_ALLOW_ORIGIN = "https://<your-blog-domain>"
+
+# Secret (not in this file): npx wrangler secret put ADMIN_TOKEN

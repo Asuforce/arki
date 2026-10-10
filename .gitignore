@@ -1,0 +1,12 @@
+node_modules/
+dist/
+target/
+build/
+.wrangler/
+.astro/
+.env
+.dev.vars
+backend/wrangler.toml
+tools/import.sql
+tools/image-map.json
+tools/out/

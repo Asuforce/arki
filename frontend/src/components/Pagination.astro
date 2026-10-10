@@ -1,0 +1,22 @@
+---
+import { pageHref } from "../lib/site";
+
+interface Props {
+  page: number;
+  limit: number;
+  total: number;
+  basePath: string;
+}
+const { page, limit, total, basePath } = Astro.props;
+const lastPage = Math.max(1, Math.ceil(total / limit));
+---
+
+{
+  lastPage > 1 && (
+    <nav class="pagination" aria-label="ページ送り">
+      {page > 1 ? <a rel="prev" href={pageHref(page - 1, basePath)}>← 新しい記事</a> : <span />}
+      <span class="current">{page} / {lastPage}</span>
+      {page < lastPage ? <a rel="next" href={pageHref(page + 1, basePath)}>古い記事 →</a> : <span />}
+    </nav>
+  )
+}
