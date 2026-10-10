@@ -3,7 +3,7 @@ mod util;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use util::{
-    constant_time_eq, epoch_to_iso, is_valid_slug, iso_to_epoch, make_excerpt,
+    constant_time_eq, epoch_to_iso, first_image_url, is_valid_slug, iso_to_epoch, make_excerpt,
     slug_from_published_at,
 };
 use worker::wasm_bindgen::JsValue;
@@ -15,7 +15,7 @@ const MAX_LIMIT: i64 = 50;
 // ---- JSON の型 ------------------------------------------------------------
 
 /// 一覧用。本文は含めない。
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 struct PostSummary {
     id: i64,
     slug: String,
@@ -23,8 +23,36 @@ struct PostSummary {
     excerpt: String,
     status: String,
     published_at: String,
-    #[serde(default)]
     categories: Vec<String>,
+    /// 本文の最初の画像。読み出しのたびに `content` から求める。
+    thumbnail: Option<String>,
+}
+
+/// 一覧クエリの 1 行。サムネイルを求めるために `content` を読むが、応答には出さない。
+#[derive(Deserialize)]
+struct PostSummaryRow {
+    id: i64,
+    slug: String,
+    title: String,
+    content: String,
+    excerpt: String,
+    status: String,
+    published_at: String,
+}
+
+impl From<PostSummaryRow> for PostSummary {
+    fn from(row: PostSummaryRow) -> Self {
+        PostSummary {
+            thumbnail: first_image_url(&row.content),
+            id: row.id,
+            slug: row.slug,
+            title: row.title,
+            excerpt: row.excerpt,
+            status: row.status,
+            published_at: row.published_at,
+            categories: Vec::new(),
+        }
+    }
 }
 
 /// 詳細用。
@@ -217,9 +245,10 @@ async fn list_posts(req: Request, ctx: RouteContext<()>) -> Result<Response> {
         .first(None)
         .await?;
 
-    let mut posts: Vec<PostSummary> = d1
+    let rows: Vec<PostSummaryRow> = d1
         .prepare(format!(
-            "SELECT p.id, p.slug, p.title, p.excerpt, p.status, p.published_at FROM posts p \
+            "SELECT p.id, p.slug, p.title, p.content, p.excerpt, p.status, p.published_at \
+             FROM posts p \
              WHERE {filter} ORDER BY p.published_at DESC, p.id DESC LIMIT ? OFFSET ?"
         ))
         .bind(&[
@@ -232,6 +261,7 @@ async fn list_posts(req: Request, ctx: RouteContext<()>) -> Result<Response> {
         .all()
         .await?
         .results()?;
+    let mut posts: Vec<PostSummary> = rows.into_iter().map(PostSummary::from).collect();
     attach_categories(&d1, &mut posts).await?;
 
     Response::from_json(&json!({
@@ -515,4 +545,36 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
         }
     };
     with_cors(response, &env)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn row(content: &str) -> PostSummaryRow {
+        PostSummaryRow {
+            id: 1,
+            slug: "2019/11/23/031344".into(),
+            title: "t".into(),
+            content: content.into(),
+            excerpt: "e".into(),
+            status: "published".into(),
+            published_at: "2019-11-22T18:13:44Z".into(),
+        }
+    }
+
+    #[test]
+    fn summary_has_thumbnail_but_not_content() {
+        let value =
+            serde_json::to_value(PostSummary::from(row("本文\n\n![a](/img/a.png)"))).unwrap();
+        let object = value.as_object().unwrap();
+        assert_eq!(object["thumbnail"], "/img/a.png");
+        assert!(!object.contains_key("content"));
+    }
+
+    #[test]
+    fn summary_thumbnail_is_null_without_image() {
+        let value = serde_json::to_value(PostSummary::from(row("画像なし"))).unwrap();
+        assert!(value.as_object().unwrap()["thumbnail"].is_null());
+    }
 }

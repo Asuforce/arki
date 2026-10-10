@@ -6,9 +6,10 @@ export interface PostSummary {
   status: "draft" | "published";
   published_at: string;
   categories: string[];
+  thumbnail: string | null;
 }
 
-export interface Post extends PostSummary {
+export interface Post extends Omit<PostSummary, "thumbnail"> {
   content: string;
   updated_at: string;
   legacy_url: string | null;

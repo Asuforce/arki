@@ -46,3 +46,22 @@
 ## 一覧の抜粋
 
 `excerpt` は書き込み時に作ります（HTML タグと Markdown の記号を除いた先頭 120 文字）。規則は `backend/src/util.rs` の `make_excerpt` と `tools/text.ts` の `makeExcerpt` で同じです。
+
+一覧のサムネイルは保存せず、読み出しのたびに `content` から求めます。`backend/src/util.rs` の `first_image_url` が本文の最初の画像の URL を返し、一覧 API が `thumbnail` として返し、`PostList.astro` が表示します。画像の無い記事は `null` で、一覧の見た目は変わりません。
+
+```mermaid
+flowchart LR
+  A["posts.content<br/>(Markdown)"] --> B["first_image_url"]
+  B --> C["GET /api/posts<br/>thumbnail"]
+  C --> D["PostList.astro<br/>96px の img"]
+```
+
+`first_image_url` の規則は次のとおりです。
+
+- 本文を `pulldown-cmark` で CommonMark として読み、記事ページの描画で最初に現れる画像を採ります。インラインコード、コードブロック（バッククォート、チルダ、4 つ字下げ）、`\!` で打ち消した画像は画像になりません。対応する `](` のない `![` は、後ろのリンクの URL を拾いません。
+- Markdown の画像は `![alt](url "title")` と参照形式を対象にし、URL の括弧は対になっていれば URL に含めます。
+- HTML の `<img src>` は、生の HTML の断片からだけ読みます。HTML コメントの中は飛ばし、引用符の中の `>` ではタグを閉じず、`data-src` や他の属性の値は `src` と見なしません。
+- Markdown の画像と HTML の `<img>` は、本文に現れる順に調べます。
+- URL は `http://`、`https://`、`/` 始まりのパスだけ通します。ページが `img` の `src` として描画する種類に合わせた規則で、`javascript:`、`data:`、`//host`、相対パスは捨てて、次の画像を探します。空白と制御文字を含む URL も捨てます。ブラウザは URL の改行や tab を取り除くので、`/` + 改行 + `/host` が `//host` になるためです。
+
+一覧 API は `content` を読んでから捨てるので、応答には含みません。画像の URL は、Markdown のエスケープと HTML の `&amp;` を戻す以外は書き換えず、そのまま `src` に入れます。RSS には反映しません。

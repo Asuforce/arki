@@ -31,7 +31,8 @@ Workers の API です。応答は JSON で、エラーは `{"error": "メッセ
   "posts": [
     {
       "id": 1, "slug": "2019/11/23/031344", "title": "...", "excerpt": "...",
-      "status": "published", "published_at": "2019-11-22T18:13:44Z", "categories": ["game"]
+      "status": "published", "published_at": "2019-11-22T18:13:44Z", "categories": ["game"],
+      "thumbnail": "https://example.com/images/a.jpg"
     }
   ],
   "page": 1, "limit": 20, "total": 1831
@@ -39,6 +40,8 @@ Workers の API です。応答は JSON で、エラーは `{"error": "メッセ
 ```
 
 並びは `published_at` の新しい順です。
+
+`thumbnail` は本文の最初の画像の URL で、画像が無ければ `null` です。保存してある値ではなく、読み出しのたびに `content` から求めます。規則は [architecture](architecture.md#一覧の抜粋) にあります。記事 1 件の応答には含まれません。
 
 ## 作成と更新の入力
 
