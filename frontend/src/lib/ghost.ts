@@ -96,7 +96,7 @@ export function tiltFromVelocity(speed: number): number {
   return -clamp(speed * TILT_PER_SPEED, -TILT_MAX, TILT_MAX) || 0;
 }
 
-/** 横の速さ 1000px/s で 30 度。渡るときの速さでは上限に当たる。右へ動くと右へ傾く。 */
+/** 横の速さ 1000px/s で 30 度。渡るときの速さでは上限に当たる。 */
 export const TILT_PER_VX = 0.03;
 export const TILT_X_MAX = 12;
 
@@ -209,7 +209,6 @@ export const SWAY_CYCLES = 1.5;
 /** 黄金角。姿勢の番号に掛けると、隣り合う節の位相がなるべく重ならない。 */
 export const SWAY_PHASE_STEP = 2.4;
 
-/** 節の中の進み具合 (0 から 1) に沿った、落ち葉のような横揺れ (px)。 */
 export function swayX(progress: number, block: number): number {
   return SWAY_AMP * Math.sin(2 * Math.PI * SWAY_CYCLES * clamp(progress, 0, 1) + poseIndex(block) * SWAY_PHASE_STEP);
 }
@@ -250,14 +249,12 @@ export function resolveSide(prev: SideState, desired: Side, now: number): SideSt
   return { side: desired, switchedAt: now };
 }
 
-/** 渡りの出発点 from から到着点 to のうち、x がどこまで進んだか (0 から 1)。 */
 export function crossProgress(from: number, to: number, x: number): number {
   if (from === to) return 1;
   return clamp((x - from) / (to - from), 0, 1);
 }
 
 export const CROSS_ARC_PX = 56;
-/** x が渡りの半分に来たところで最も高くなる、上向き (負) の弧。端では 0。 */
 export function arcLift(progress: number): number {
   return -CROSS_ARC_PX * Math.sin(Math.PI * clamp(progress, 0, 1));
 }
