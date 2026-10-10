@@ -14,6 +14,22 @@ cd frontend && npm run build && npx wrangler deploy --config dist/server/wrangle
 - 独自ドメインの設定には Worker が先に存在している必要があります。先に両方を一度デプロイしてから、ドメインを割り当てます。
 - 本番の `ADMIN_TOKEN` は `npx wrangler secret put ADMIN_TOKEN` で設定します。
 
+## GitHub Actions で自動デプロイ
+
+`.github/workflows/deploy.yml` が main への push で、D1 のマイグレーション、バックエンド、フロントエンドの順にデプロイします。実際の値はリポジトリに置かず、GitHub の設定で渡します。
+
+| 種類 | 名前 | 内容 |
+| --- | --- | --- |
+| Secret | `CLOUDFLARE_API_TOKEN` | Workers と D1 を編集できるトークン |
+| Variable | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare のアカウント ID |
+| Variable | `ARKI_D1_DATABASE_ID` | D1 データベースの ID |
+| Variable | `ARKI_BLOG_ORIGIN` | ブログの URL（CORS 用、例: `https://blog.example.com`） |
+| Variable | `ARKI_API_URL` | API の URL（独自ドメイン） |
+| Variable | `ARKI_IMAGE_BASE_URL` | 画像配信の URL（任意） |
+| Variable | `ARKI_SITE_TITLE` | サイト名（任意） |
+
+`ADMIN_TOKEN` は一度だけ手元で `npx wrangler secret put ADMIN_TOKEN` を実行して設定します（Worker に保存され、デプロイでは消えません）。
+
 ## バックアップ
 
 記事は git に入らないので、次の 2 つで守ります。

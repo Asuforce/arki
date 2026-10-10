@@ -1,0 +1,69 @@
+name: deploy
+
+# main への push で本番へデプロイする。実際の値（D1 の ID、ドメインなど）は
+# リポジトリに置かず、GitHub の repository variables / secrets から渡す。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Generate wrangler.toml
+        env:
+          D1_DATABASE_ID: ${{ vars.ARKI_D1_DATABASE_ID }}
+          BLOG_ORIGIN: ${{ vars.ARKI_BLOG_ORIGIN }}
+        run: |
+          test -n "$D1_DATABASE_ID" && test -n "$BLOG_ORIGIN"
+          sed -e "s|<YOUR_D1_DATABASE_ID>|$D1_DATABASE_ID|" \
+              -e "s|https://<your-blog-domain>|$BLOG_ORIGIN|" \
+              wrangler.toml.example > wrangler.toml
+      - run: npx wrangler d1 migrations apply DB --remote
+      - run: npx wrangler deploy
+
+  frontend:
+    runs-on: ubuntu-latest
+    needs: backend
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      PUBLIC_API_URL: ${{ vars.ARKI_API_URL }}
+      PUBLIC_IMAGE_BASE_URL: ${{ vars.ARKI_IMAGE_BASE_URL }}
+      PUBLIC_SITE_TITLE: ${{ vars.ARKI_SITE_TITLE }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npx wrangler deploy --config dist/server/wrangler.json
