@@ -1,4 +1,5 @@
 export const siteTitle: string = import.meta.env.PUBLIC_SITE_TITLE ?? "arki";
+export const authorName = "Shun Nishitsuji";
 
 const dateFormat = new Intl.DateTimeFormat("ja-JP", {
   timeZone: "Asia/Tokyo",

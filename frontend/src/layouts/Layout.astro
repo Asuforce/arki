@@ -7,7 +7,7 @@ import "../styles/world.css";
 import Ghost from "../components/Ghost.astro";
 import Starfield from "../components/Starfield.astro";
 import ThemeToggle from "../components/ThemeToggle.astro";
-import { siteTitle } from "../lib/site";
+import { authorName, siteTitle } from "../lib/site";
 
 interface Props {
   title?: string;
@@ -58,7 +58,7 @@ const pageTitle = title ? `${title} | ${siteTitle}` : siteTitle;
     <footer class="site-footer">
       <div class="container">
         <a href="/rss.xml">RSS</a>
-        {siteTitle && <small>© {siteTitle}</small>}
+        <small>© {authorName}{siteTitle && ` · ${siteTitle}`}</small>
       </div>
     </footer>
     <script>

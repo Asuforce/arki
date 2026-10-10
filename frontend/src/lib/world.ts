@@ -1,5 +1,3 @@
-/** 星とゴーストの位置と視線を決める計算。DOM は触らない。 */
-
 export interface Star {
   x: number;
   y: number;
@@ -33,7 +31,6 @@ export const COLUMN_W = 760;
 /** これ以上で、本文の列の右の余白にゴーストを置く。余白は (幅 - 760) / 2 で、1000px のとき 120px。 */
 export const WIDE_MIN = 1000;
 export const GHOST_W = 72;
-/** ghost の viewBox (439 x 392) の縦横比 */
 export const GHOST_ASPECT = 392 / 439;
 export const NAV_H = 56;
 const TOP_GAP = 16;
@@ -41,19 +38,16 @@ const BOTTOM_GAP = 32;
 
 const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
 
-/** 本文の列の右の余白の中央。 */
 export function ghostX(width: number): number {
   const columnRight = (width + COLUMN_W) / 2;
   return (columnRight + width) / 2;
 }
 
-/** スクロールの進み具合。画面に収まるページは 0 のまま。 */
 export function scrollProgress(scrollY: number, maxScroll: number): number {
   if (maxScroll <= 0) return 0;
   return clamp01(scrollY / maxScroll);
 }
 
-/** ゴーストの上端の y。進み具合に比例して、ナビの下から、足元が画面下端の 32px 上になるまで降りる。 */
 export function ghostTop(progress: number, viewportH: number, ghostH: number): number {
   const from = NAV_H + TOP_GAP;
   const to = Math.max(from, viewportH - BOTTOM_GAP - ghostH);
@@ -65,17 +59,12 @@ export interface Gaze {
   y: number;
 }
 
-/** 本文を読み進める視線。上端では上、半ばで正面、下端では下。 */
 export function readingGaze(progress: number, reach: number): Gaze {
   return { x: 0, y: (2 * clamp01(progress) - 1) * reach };
 }
 
 export const CURSOR_NEAR = 360;
 
-/**
- * 視線。カーソルが無い、または遠いときは本文を読み進める視線で、
- * ゴーストの中心から 360px 以内にカーソルが入るほど、カーソルの方向へ寄る。
- */
 export function gaze(progress: number, cursor: { dx: number; dy: number } | null, reach: number): Gaze {
   const reading = readingGaze(progress, reach);
   if (!cursor) return reading;
