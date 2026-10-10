@@ -143,6 +143,83 @@ pub fn make_excerpt(markdown: &str, max_chars: usize) -> String {
     collapsed.chars().take(max_chars).collect()
 }
 
+/// 一覧のサムネイルにする、本文の最初の画像の URL。
+/// Markdown の `![alt](url)` と HTML の `<img src>` を見る。コードブロックの中は飛ばす。
+pub fn first_image_url(markdown: &str) -> Option<String> {
+    let mut body = String::new();
+    let mut in_fence = false;
+    for line in markdown.lines() {
+        if line.trim_start().starts_with("```") {
+            in_fence = !in_fence;
+        } else if !in_fence {
+            body.push_str(line);
+            body.push('\n');
+        }
+    }
+    // 小文字化しても ASCII だけなのでバイト位置は body と一致する
+    let lower = body.to_ascii_lowercase();
+    let mut from = 0;
+    loop {
+        let md = body[from..].find("![").map(|p| p + from);
+        let html = lower[from..].find("<img").map(|p| p + from);
+        let (start, is_html) = match (md, html) {
+            (None, None) => return None,
+            (Some(m), Some(h)) if h < m => (h, true),
+            (Some(m), _) => (m, false),
+            (None, Some(h)) => (h, true),
+        };
+        let url = if is_html {
+            html_img_src(&body[start..], &lower[start..])
+        } else {
+            markdown_image_url(&body[start..])
+        };
+        if let Some(url) = url.filter(|u| is_thumbnail_url(u)) {
+            return Some(url);
+        }
+        from = start + 1;
+    }
+}
+
+/// `![alt](url "title")` の url。`s` は `![` から始まる。
+fn markdown_image_url(s: &str) -> Option<String> {
+    let rest = &s[s.find("](")? + 2..];
+    let inner = &rest[..rest.find(')')?];
+    inner.split_whitespace().next().map(str::to_string)
+}
+
+/// `<img ... src="url">` の url。`s` は `<img` から始まり、`lower` はその小文字版。
+fn html_img_src(s: &str, lower: &str) -> Option<String> {
+    let after = lower.as_bytes().get(4)?;
+    if after.is_ascii_alphanumeric() {
+        return None;
+    }
+    let end = s.find('>')?;
+    let (tag, tag_lower) = (&s[..end], &lower[..end]);
+    for (pos, _) in tag_lower.match_indices("src") {
+        let preceded = tag.as_bytes()[pos - 1];
+        if !(preceded.is_ascii_whitespace() || preceded == b'"' || preceded == b'\'') {
+            continue;
+        }
+        let Some(value) = tag[pos + 3..].trim_start().strip_prefix('=') else {
+            continue;
+        };
+        let value = value.trim_start();
+        return match value.chars().next()? {
+            q @ ('"' | '\'') => value[1..].split(q).next().map(str::to_string),
+            _ => value.split_whitespace().next().map(str::to_string),
+        };
+    }
+    None
+}
+
+/// 絶対の http(s) か、サイト内の `/` 始まりのパスだけ通す。`//host` は別オリジンなので落とす。
+fn is_thumbnail_url(url: &str) -> bool {
+    let lower = url.to_ascii_lowercase();
+    lower.starts_with("http://")
+        || lower.starts_with("https://")
+        || (url.starts_with('/') && !url.starts_with("//") && !url.starts_with("/\\"))
+}
+
 /// 時間一定で文字列を比べる（トークンの比較用）。
 pub fn constant_time_eq(a: &str, b: &str) -> bool {
     let (a, b) = (a.as_bytes(), b.as_bytes());
@@ -210,6 +287,94 @@ mod tests {
         let md = "### TL;DR\n\n- **SW** JFO\n\n![](https://example.com/a.jpg)\n\n[リンク](https://example.com) です\n<!-- toc -->\n<a href=\"x\">card</a>";
         assert_eq!(make_excerpt(md, 100), "TL;DR - SW JFO リンク です card");
         assert_eq!(make_excerpt("あいうえお", 3), "あいう");
+    }
+
+    #[test]
+    fn thumbnail_takes_first_image() {
+        let md = "![a](https://example.com/1.jpg)\n\n![b](https://example.com/2.jpg)";
+        assert_eq!(
+            first_image_url(md).as_deref(),
+            Some("https://example.com/1.jpg")
+        );
+        assert_eq!(
+            first_image_url("![](/img/a.png)").as_deref(),
+            Some("/img/a.png")
+        );
+    }
+
+    #[test]
+    fn thumbnail_after_text() {
+        let md = "# 見出し\n\n本文 [リンク](https://example.com) です。\n\n![x](https://example.com/p.png)";
+        assert_eq!(
+            first_image_url(md).as_deref(),
+            Some("https://example.com/p.png")
+        );
+    }
+
+    #[test]
+    fn thumbnail_trims_title() {
+        assert_eq!(
+            first_image_url("![a]( https://example.com/p.png \"タイトル\" )").as_deref(),
+            Some("https://example.com/p.png")
+        );
+    }
+
+    #[test]
+    fn thumbnail_from_html_img() {
+        let md =
+            "text\n<img class=\"a\" data-src=\"/no.png\" src='https://example.com/h.png' alt=\"\">";
+        assert_eq!(
+            first_image_url(md).as_deref(),
+            Some("https://example.com/h.png")
+        );
+        assert_eq!(
+            first_image_url("<IMG\nsrc=\"/a.png\">").as_deref(),
+            Some("/a.png")
+        );
+        assert_eq!(first_image_url("<imgx src=\"/a.png\">"), None);
+        assert_eq!(
+            first_image_url("<img alt=\"src\" src=\"/a.png\">").as_deref(),
+            Some("/a.png")
+        );
+    }
+
+    #[test]
+    fn thumbnail_orders_markdown_and_html() {
+        let md = "<img src=\"/html.png\"> ![m](/md.png)";
+        assert_eq!(first_image_url(md).as_deref(), Some("/html.png"));
+    }
+
+    #[test]
+    fn thumbnail_ignores_code_fence() {
+        let md = "```md\n![x](https://example.com/in-code.png)\n```\n\n![y](https://example.com/out.png)";
+        assert_eq!(
+            first_image_url(md).as_deref(),
+            Some("https://example.com/out.png")
+        );
+        assert_eq!(first_image_url("```\n![x](/a.png)\n```"), None);
+    }
+
+    #[test]
+    fn thumbnail_rejects_bad_scheme() {
+        assert_eq!(first_image_url("![x](javascript:alert(1))"), None);
+        assert_eq!(first_image_url("![x](data:image/png;base64,AAAA)"), None);
+        assert_eq!(first_image_url("<img src=\"javascript:alert(1)\">"), None);
+        assert_eq!(first_image_url("![x](//evil.example/a.png)"), None);
+        assert_eq!(first_image_url("![x](a.png)"), None);
+        assert_eq!(
+            first_image_url("![x](data:image/png;base64,AAAA)\n![y](/ok.png)").as_deref(),
+            Some("/ok.png")
+        );
+    }
+
+    #[test]
+    fn thumbnail_none_without_image() {
+        assert_eq!(first_image_url(""), None);
+        assert_eq!(
+            first_image_url("画像なし [リンク](https://example.com)"),
+            None
+        );
+        assert_eq!(first_image_url("![壊れた](https://example.com/a.png"), None);
     }
 
     #[test]

@@ -46,3 +46,21 @@
 ## 一覧の抜粋
 
 `excerpt` は書き込み時に作ります（HTML タグと Markdown の記号を除いた先頭 120 文字）。規則は `backend/src/util.rs` の `make_excerpt` と `tools/text.ts` の `makeExcerpt` で同じです。
+
+一覧のサムネイルは保存せず、読み出しのたびに `content` から求めます。`backend/src/util.rs` の `first_image_url` が本文の最初の画像の URL を返し、一覧 API が `thumbnail` として返し、`PostList.astro` が表示します。画像の無い記事は `null` で、一覧の見た目は変わりません。
+
+```mermaid
+flowchart LR
+  A["posts.content<br/>(Markdown)"] --> B["first_image_url"]
+  B --> C["GET /api/posts<br/>thumbnail"]
+  C --> D["PostList.astro<br/>96px の img"]
+```
+
+`first_image_url` の規則は次のとおりです。
+
+- Markdown の `![alt](url)` と HTML の `<img src>` を対象にし、先頭に近いほうを採ります。
+- バッククォート 3 つで囲んだコードブロックの中は飛ばします。
+- URL は `http://`、`https://`、`/` 始まりのパスだけ通します。`javascript:`、`data:`、`//host`、相対パスは捨てて、次の画像を探します。
+- Markdown の URL の前後の空白と、後ろの `"title"` は落とします。
+
+一覧 API は `content` を読んでから捨てるので、応答には含みません。画像の URL は書き換えず、そのまま `src` に入れます。RSS には反映しません。

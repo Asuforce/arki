@@ -14,19 +14,22 @@ const { posts } = Astro.props;
   ) : (
     <ul class="post-list">
       {posts.map((post) => (
-        <li>
-          <time datetime={post.published_at}>{formatDate(post.published_at)}</time>
-          <a class="post-title" href={`/entry/${post.slug}`}>
-            {post.title}
-          </a>
-          {post.categories.length > 0 && (
-            <span class="tags">
-              {post.categories.map((c) => (
-                <a href={`/category/${encodeURIComponent(c)}`}>{c}</a>
-              ))}
-            </span>
-          )}
-          {post.excerpt && <p class="excerpt">{post.excerpt}</p>}
+        <li class:list={{ "has-thumb": post.thumbnail }}>
+          <div class="post-main">
+            <time datetime={post.published_at}>{formatDate(post.published_at)}</time>
+            <a class="post-title" href={`/entry/${post.slug}`}>
+              {post.title}
+            </a>
+            {post.categories.length > 0 && (
+              <span class="tags">
+                {post.categories.map((c) => (
+                  <a href={`/category/${encodeURIComponent(c)}`}>{c}</a>
+                ))}
+              </span>
+            )}
+            {post.excerpt && <p class="excerpt">{post.excerpt}</p>}
+          </div>
+          {post.thumbnail && <img class="thumb" src={post.thumbnail} alt="" loading="lazy" decoding="async" />}
         </li>
       ))}
     </ul>

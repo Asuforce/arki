@@ -20,6 +20,10 @@ a { color: var(--accent-text); }
 .tags { display: inline-flex; gap: 0.5rem; margin-left: 0.5rem; }
 .tags a { font-size: 0.75rem; color: var(--muted); text-decoration: none; border: 1px solid var(--rule); padding: 0 0.5rem; }
 .tags a:hover { color: var(--accent-text); border-color: var(--accent-text); }
+.post-list li.has-thumb { display: flex; gap: 1rem; align-items: flex-start; }
+.post-main { flex: 1; min-width: 0; }
+.thumb { flex: none; width: 96px; height: 96px; object-fit: cover; border: 1px solid var(--rule); }
+@media (max-width: 480px) { .thumb { width: 72px; height: 72px; } }
 .empty { color: var(--muted); }
 
 .pagination { display: flex; justify-content: space-between; margin-top: 2rem; font-size: 0.9rem; }
