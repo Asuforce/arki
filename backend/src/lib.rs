@@ -47,16 +47,12 @@ struct Post {
 struct PostInput {
     title: String,
     content: String,
-    #[serde(default = "default_status")]
-    status: String,
+    /// 作成時の既定は draft。更新時に省略すれば今の値のまま。
+    status: Option<String>,
     published_at: Option<String>,
     slug: Option<String>,
-    #[serde(default)]
-    categories: Vec<String>,
-}
-
-fn default_status() -> String {
-    "draft".to_string()
+    /// 作成時の既定は空。更新時に省略すれば今のカテゴリのまま（`[]` を渡すと全部外す）。
+    categories: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]
@@ -120,8 +116,10 @@ fn validate_input(input: &PostInput) -> Option<&'static str> {
     if input.title.trim().is_empty() {
         return Some("title is required");
     }
-    if input.status != "draft" && input.status != "published" {
-        return Some("status must be 'draft' or 'published'");
+    if let Some(status) = &input.status {
+        if status != "draft" && status != "published" {
+            return Some("status must be 'draft' or 'published'");
+        }
     }
     if let Some(at) = &input.published_at {
         if iso_to_epoch(at).is_none() {
@@ -136,6 +134,7 @@ fn validate_input(input: &PostInput) -> Option<&'static str> {
     if input
         .categories
         .iter()
+        .flatten()
         .any(|c| c.trim().is_empty() || c.len() > 100)
     {
         return Some("category names must be 1-100 characters");
@@ -359,12 +358,12 @@ async fn create_post(mut req: Request, ctx: RouteContext<()>) -> Result<Response
             text(input.title.trim()),
             text(&input.content),
             text(&make_excerpt(&input.content, 120)),
-            text(&input.status),
+            text(input.status.as_deref().unwrap_or("draft")),
             text(&published_at),
         ])?];
     statements.extend(category_statements(
         &d1,
-        &input.categories,
+        input.categories.as_deref().unwrap_or_default(),
         false,
         text(&slug),
     )?);
@@ -398,7 +397,7 @@ async fn update_post(mut req: Request, ctx: RouteContext<()>) -> Result<Response
     let Some(current) = fetch_post(&d1, "id = ?", num(id), true).await? else {
         return json_error("Not Found", 404);
     };
-    // 省略された項目は今の値のままにする
+    // 省略された項目（slug、published_at、status、categories）は今の値のままにする
     let slug = input.slug.clone().unwrap_or(current.slug.clone());
     let published_at = input
         .published_at
@@ -415,8 +414,9 @@ async fn update_post(mut req: Request, ctx: RouteContext<()>) -> Result<Response
         }
     }
 
-    let mut statements = vec![
-        d1.prepare(
+    let status = input.status.as_deref().unwrap_or(&current.status);
+    let mut statements = vec![d1
+        .prepare(
             "UPDATE posts SET slug = ?, title = ?, content = ?, excerpt = ?, status = ?, \
              published_at = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?",
         )
@@ -425,14 +425,18 @@ async fn update_post(mut req: Request, ctx: RouteContext<()>) -> Result<Response
             text(input.title.trim()),
             text(&input.content),
             text(&make_excerpt(&input.content, 120)),
-            text(&input.status),
+            text(status),
             text(&published_at),
             num(id),
-        ])?,
-        d1.prepare("DELETE FROM post_categories WHERE post_id = ?")
-            .bind(&[num(id)])?,
-    ];
-    statements.extend(category_statements(&d1, &input.categories, true, num(id))?);
+        ])?];
+    // categories を省略したときは今のカテゴリを触らない
+    if let Some(categories) = &input.categories {
+        statements.push(
+            d1.prepare("DELETE FROM post_categories WHERE post_id = ?")
+                .bind(&[num(id)])?,
+        );
+        statements.extend(category_statements(&d1, categories, true, num(id))?);
+    }
     d1.batch(statements).await?;
 
     Response::from_json(&json!({ "id": id, "slug": slug }))
