@@ -1,5 +1,6 @@
 import {
   BLINK_MS,
+  CROSS_DONE_PX,
   FLOAT_IDLE,
   FLOAT_MOVING,
   HOP_KICK,
@@ -7,18 +8,26 @@ import {
   HOP_SINK_PX,
   MAX_DT,
   SPRINGS,
+  arcLift,
   atRest,
   bandY,
   blinkDelay,
+  crossProgress,
   gaze,
   listY,
+  mirrorPose,
   pickArticleBlock,
   pickListBlock,
   poseAt,
   readLine,
+  resolveSide,
   sectionProgress,
+  sideForBlock,
   springStep,
+  tiltFromHorizontalVelocity,
   tiltFromVelocity,
+  xTarget,
+  type SideState,
   type Span,
   type Spring,
 } from "../lib/ghost";
@@ -97,6 +106,11 @@ export function initGhost(): void {
   const tilt: Spring = { x: 0, v: 0 };
   const scale: Spring = { x: 1, v: 0 };
   const hop: Spring = { x: 0, v: 0 };
+  const xs: Spring = { x: 0, v: 0 };
+  let sideState: SideState = { side: "right", switchedAt: -Infinity };
+  let crossing = false;
+  let crossFrom = 0;
+  let lastWidth = 0;
   let block = -1;
   let running = false;
   let lastTime = 0;
@@ -105,33 +119,36 @@ export function initGhost(): void {
   let hopStart = -1;
   let hopKicked = true;
 
-  const target = (ghostH: number): { block: number; y: number } => {
+  const width = (): number => document.documentElement.clientWidth;
+
+  const target = (ghostH: number): { block: number; y: number; progress: number | null } => {
     const vh = window.innerHeight;
     const line = readLine(window.scrollY, vh);
     const scrollable = document.documentElement.scrollHeight > vh;
     if (layout.kind === "list") {
       const i = hovered ?? Math.max(0, pickListBlock(layout.spans, line));
-      return { block: i, y: listY(layout.titleMids[i] - window.scrollY, vh, ghostH) };
+      return { block: i, y: listY(layout.titleMids[i] - window.scrollY, vh, ghostH), progress: null };
     }
     if (layout.kind === "article") {
       const i = Math.max(0, pickArticleBlock(layout.tops, line));
       const progress = scrollable ? sectionProgress(layout.spans[i], line) : 0;
-      return { block: i, y: bandY(progress, vh, ghostH) };
+      return { block: i, y: bandY(progress, vh, ghostH), progress };
     }
-    return { block: 0, y: bandY(0, vh, ghostH) };
+    return { block: 0, y: bandY(0, vh, ghostH), progress: null };
   };
 
   const render = (): void => {
     const h = ghost.offsetHeight;
-    const x = ghostX(document.documentElement.clientWidth);
     const moving = reduced.matches ? 0 : 1;
     ghost.style.transform =
-      `translate(${x - GHOST_W / 2}px, ${y.x + hop.x * moving}px) rotate(${tilt.x}deg) scale(${scale.x})`;
+      `translate(${xs.x - GHOST_W / 2}px, ${y.x + hop.x * moving}px) rotate(${tilt.x}deg) scale(${scale.x})`;
+    ghost.dataset.side = sideState.side;
+    ghost.toggleAttribute("data-crossing", crossing);
 
-    const pose = poseAt(block);
+    const pose = mirrorPose(poseAt(block), sideState.side);
     const cursor =
       pointer && finePointer.matches && !reduced.matches
-        ? { dx: pointer.x - x, dy: pointer.y - (y.x + h / 2) }
+        ? { dx: pointer.x - xs.x, dy: pointer.y - (y.x + h / 2) }
         : null;
     const eyes = reduced.matches ? { x: 0, y: 0 } : gaze(pose.gaze, cursor, PUPIL_REACH);
     ghost.style.setProperty("--gx", eyes.x.toFixed(2));
@@ -144,9 +161,19 @@ export function initGhost(): void {
     blinkNow();
   };
 
+  const snapX = (t: { block: number; progress: number | null }): void => {
+    const w = width();
+    lastWidth = w;
+    sideState = { side: sideForBlock(t.block, w), switchedAt: sideState.switchedAt };
+    crossing = false;
+    xs.x = xTarget(w, sideState.side, t.block, t.progress);
+    xs.v = 0;
+  };
+
   const settle = (): void => {
     const t = target(ghost.offsetHeight);
-    const pose = poseAt(t.block);
+    snapX(t);
+    const pose = mirrorPose(poseAt(t.block), sideState.side);
     y.x = t.y;
     tilt.x = pose.tilt;
     scale.x = pose.scale;
@@ -169,18 +196,30 @@ export function initGhost(): void {
       block = t.block;
       react(now);
     }
-    const pose = poseAt(block);
+    const w = width();
+    const resolved = resolveSide(sideState, sideForBlock(block, w), now);
+    if (resolved !== sideState) {
+      sideState = resolved;
+      crossing = true;
+      crossFrom = xs.x;
+    }
+    const pose = mirrorPose(poseAt(block), sideState.side);
+    const tx = xTarget(w, sideState.side, block, t.progress);
+    if (crossing && Math.abs(tx - xs.x) <= CROSS_DONE_PX) crossing = false;
 
-    let hopTarget = 0;
+    let hopTarget = crossing ? arcLift(crossProgress(crossFrom, tx, xs.x)) : 0;
     if (hopStart >= 0) {
-      if (now - hopStart < HOP_SINK_MS) hopTarget = HOP_SINK_PX;
+      if (now - hopStart < HOP_SINK_MS) hopTarget += HOP_SINK_PX;
       else if (!hopKicked) {
         hopKicked = true;
         hop.v += HOP_KICK;
       }
     }
 
-    const tiltTarget = pose.tilt + tiltFromVelocity(scrollVel + y.v);
+    // 縦の速度の傾きは本文の側へ振れるよう左で反転し、横の速度の傾きは画面の向きのまま
+    const lean = sideState.side === "right" ? 1 : -1;
+    const tiltTarget = pose.tilt + lean * tiltFromVelocity(scrollVel + y.v) + tiltFromHorizontalVelocity(xs.v);
+    Object.assign(xs, springStep(xs, tx, dt, SPRINGS.x));
     Object.assign(tilt, springStep(tilt, tiltTarget, dt, SPRINGS.tilt));
     Object.assign(y, springStep(y, t.y, dt, SPRINGS.y));
     Object.assign(scale, springStep(scale, pose.scale, dt, SPRINGS.scale));
@@ -188,6 +227,9 @@ export function initGhost(): void {
     render();
 
     const still =
+      atRest(xs, tx) &&
+      !crossing &&
+      sideState.side === sideForBlock(block, w) &&
       atRest(y, t.y) &&
       atRest(tilt, pose.tilt) &&
       atRest(scale, pose.scale) &&
@@ -223,6 +265,11 @@ export function initGhost(): void {
   const instant = (): void => {
     const t = target(ghost.offsetHeight);
     block = t.block;
+    lastWidth = width();
+    sideState = { side: "right", switchedAt: -Infinity };
+    crossing = false;
+    xs.x = ghostX(lastWidth);
+    xs.v = 0;
     y.x = t.y;
     tilt.x = 0;
     scale.x = 1;
@@ -242,6 +289,7 @@ export function initGhost(): void {
       ghost.setAttribute("data-ready", "");
       return;
     }
+    if (width() !== lastWidth) snapX(target(ghost.offsetHeight));
     wake();
   };
 

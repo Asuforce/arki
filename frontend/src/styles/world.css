@@ -63,7 +63,10 @@
     animation:
       ghost-bob 6.4s ease-in-out infinite,
       ghost-bob-fine 4.3s ease-in-out infinite;
+    transition: opacity 200ms var(--ease);
   }
+  /* 渡っている間は本文が隠れすぎないよう薄くする。登場の animation が .ghost-float の opacity を握っているので svg 側で下げる */
+  .ghost-float[data-crossing] svg { opacity: 0.45; }
 }
 
 @media (max-width: 999.98px) {
@@ -107,5 +110,6 @@
 @media (prefers-reduced-motion: reduce) {
   .ghost-float { opacity: 1; }
   .ghost-float[data-ready], .ghost-float svg { animation: none; }
+  .ghost-float svg { transition: none; }
   .ghost-pupil { transition: none; }
 }
