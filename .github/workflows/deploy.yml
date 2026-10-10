@@ -1,9 +1,11 @@
 name: deploy
 
-# main への push で本番へデプロイする。実際の値（D1 の ID、ドメインなど）は
+# main の ci が成功したあとに本番へデプロイする。実際の値（D1 の ID、ドメインなど）は
 # リポジトリに置かず、GitHub の repository variables / secrets から渡す。
 on:
-  push:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -20,12 +22,15 @@ env:
 
 jobs:
   backend:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -59,6 +64,8 @@ jobs:
       PUBLIC_SITE_TITLE: ${{ vars.ARKI_SITE_TITLE }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
