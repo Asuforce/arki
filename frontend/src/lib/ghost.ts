@@ -226,11 +226,6 @@ export function sideGroups(isBoundary: readonly boolean[]): number[] {
   return isBoundary.map((boundary) => (boundary ? ++seen : seen));
 }
 
-export function sideForGroup(group: number, width: number): Side {
-  if (width < CROSS_SIDES_MIN_WIDTH) return "right";
-  return Math.trunc(group) % 2 === 0 ? "right" : "left";
-}
-
 export interface SideState {
   side: Side;
   switchedAtMs: number;
@@ -239,11 +234,14 @@ export interface SideState {
 
 export const NEVER_SWITCHED: SideState = { side: "right", switchedAtMs: -Infinity, switchedAtScrollY: -Infinity };
 
-export function resolveSide(prev: SideState, desired: Side, now: number, scrollY: number): SideState {
-  if (desired === prev.side) return prev;
+const flip = (side: Side): Side => (side === "right" ? "left" : "right");
+
+export function nextSide(prev: SideState, groupChanged: boolean, width: number, now: number, scrollY: number): SideState {
+  if (width < CROSS_SIDES_MIN_WIDTH) return prev.side === "right" ? prev : NEVER_SWITCHED;
+  if (!groupChanged) return prev;
   if (now - prev.switchedAtMs < CROSS_COOLDOWN_MS) return prev;
   if (Math.abs(scrollY - prev.switchedAtScrollY) < CROSS_MIN_SCROLL_PX) return prev;
-  return { side: desired, switchedAtMs: now, switchedAtScrollY: scrollY };
+  return { side: flip(prev.side), switchedAtMs: now, switchedAtScrollY: scrollY };
 }
 
 export function crossProgress(from: number, to: number, x: number): number {

@@ -9,6 +9,7 @@ import {
   MAX_DT,
   NEUTRAL_POSE,
   NEVER_SWITCHED,
+  nextSide,
   SPRINGS,
   aimFor,
   arcLift,
@@ -21,9 +22,7 @@ import {
   pickArticleBlock,
   pickListTarget,
   readLine,
-  resolveSide,
   sectionProgress,
-  sideForGroup,
   sideGroups,
   springStep,
   tiltFromHorizontalVelocity,
@@ -125,6 +124,7 @@ export function initGhost(): void {
   const hop: Spring = { x: 0, v: 0 };
   const xs: Spring = { x: 0, v: 0 };
   let sideState: SideState = NEVER_SWITCHED;
+  let group = 0;
   let crossing = false;
   let crossFrom = 0;
   let lastWidth = 0;
@@ -183,7 +183,8 @@ export function initGhost(): void {
     const w = width();
     lastWidth = w;
     block = t.block;
-    sideState = { ...sideState, side: sideForGroup(t.group, w) };
+    group = t.group;
+    sideState = reduced.matches ? NEVER_SWITCHED : nextSide(sideState, false, w, 0, 0);
     crossing = false;
     const aim = aimFor(reduced.matches, w, sideState.side, t.block, t.progress);
     pose = aim.pose;
@@ -212,8 +213,8 @@ export function initGhost(): void {
       react(now);
     }
     const w = width();
-    const desiredSide = sideForGroup(t.group, w);
-    const resolved = resolveSide(sideState, desiredSide, now, scrollY);
+    const resolved = nextSide(sideState, t.group !== group, w, now, scrollY);
+    group = t.group;
     if (resolved !== sideState) {
       sideState = resolved;
       crossing = true;
@@ -245,7 +246,6 @@ export function initGhost(): void {
     const still =
       atRest(xs, tx) &&
       !crossing &&
-      sideState.side === desiredSide &&
       atRest(y, t.y) &&
       atRest(tilt, pose.tilt) &&
       atRest(scale, pose.scale) &&
@@ -277,6 +277,7 @@ export function initGhost(): void {
     syncBlink();
     if (!wide.matches) return;
     layout = measure();
+    group = target(ghost.offsetHeight).group;
     if (reduced.matches || !ghost.hasAttribute("data-ready")) {
       settle();
       render();
