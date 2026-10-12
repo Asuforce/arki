@@ -39,12 +39,15 @@ function initStars(): void {
 
   const stars = makeStars();
 
+  let drawnWidth = 0;
+
   const draw = (): void => {
     const style = getComputedStyle(document.documentElement);
     const rgb = style.getPropertyValue("--star").trim().replace(/\s+/g, ", ");
     const gain = Number(style.getPropertyValue("--star-a")) || 1;
     const dpr = window.devicePixelRatio || 1;
     const { innerWidth: w, innerHeight: h } = window;
+    drawnWidth = w;
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -61,6 +64,7 @@ function initStars(): void {
   window.addEventListener(
     "resize",
     () => {
+      if (window.innerWidth === drawnWidth) return;
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(draw);
     },

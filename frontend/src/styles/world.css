@@ -102,7 +102,6 @@
 :root[data-theme="light"] .icon-sun { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  .ghost-float { opacity: 1; }
   .ghost-float[data-ready], .ghost-float svg { animation: none; }
   .ghost-float svg { transition: none; }
   .ghost-pupil { transition: none; }

@@ -73,10 +73,11 @@ function measure(): Layout {
   return { kind: "none" };
 }
 
-function initBlink(pupils: SVGElement[], reduced: MediaQueryList): () => void {
+function initBlink(pupils: SVGElement[], shown: () => boolean): { blink: () => void; sync: () => void } {
   let n = 0;
+  let timer: number | undefined;
   const blink = (): void => {
-    if (reduced.matches || document.hidden) return;
+    if (!shown() || document.hidden) return;
     for (const p of pupils) {
       p.animate([{ scale: "1 1" }, { scale: "1 0.08" }, { scale: "1 1" }], {
         duration: BLINK_MS,
@@ -85,24 +86,31 @@ function initBlink(pupils: SVGElement[], reduced: MediaQueryList): () => void {
     }
   };
   const next = (): void => {
-    window.setTimeout(() => {
+    timer = window.setTimeout(() => {
       blink();
       next();
     }, blinkDelay(n++));
   };
-  next();
-  return blink;
+  const sync = (): void => {
+    if (shown() && timer === undefined) next();
+    else if (!shown() && timer !== undefined) {
+      window.clearTimeout(timer);
+      timer = undefined;
+    }
+  };
+  return { blink, sync };
 }
 
 export function initGhost(): void {
-  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const pupils = [...document.querySelectorAll<SVGElement>(".ghost-pupil")];
-  const blinkNow = initBlink(pupils, reduced);
-
   const ghost = document.querySelector<HTMLElement>(".ghost-float");
   if (!ghost) return;
 
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
   const wide = window.matchMedia(`(min-width: ${WIDE_MIN}px)`);
+  const { blink: blinkNow, sync: syncBlink } = initBlink(
+    [...ghost.querySelectorAll<SVGElement>(".ghost-pupil")],
+    () => wide.matches && !reduced.matches,
+  );
   const finePointer = window.matchMedia("(pointer: fine)");
   let layout: Layout = { kind: "none" };
   let pointer: { x: number; y: number } | null = null;
@@ -263,8 +271,9 @@ export function initGhost(): void {
   };
 
   const place = (): void => {
-    layout = measure();
+    syncBlink();
     if (!wide.matches) return;
+    layout = measure();
     if (reduced.matches || !ghost.hasAttribute("data-ready")) {
       settle();
       render();
@@ -276,7 +285,6 @@ export function initGhost(): void {
   };
 
   window.addEventListener("scroll", wake, { passive: true });
-  window.addEventListener("resize", place, { passive: true });
   window.addEventListener(
     "pointermove",
     (e) => {
@@ -301,6 +309,10 @@ export function initGhost(): void {
 
   wide.addEventListener("change", place);
   reduced.addEventListener("change", place);
-  new ResizeObserver(place).observe(document.body);
+  const resize = new ResizeObserver(place);
+  resize.observe(document.body);
+  // body は高さだけの変化では動かない。fixed の星空は viewport と同じ大きさ
+  const viewport = document.querySelector(".starfield");
+  if (viewport) resize.observe(viewport);
   place();
 }
