@@ -7,6 +7,7 @@ import {
   BLINK_MIN_MS,
   CROSS_ARC_PX,
   CROSS_COOLDOWN_MS,
+  CROSS_MIN_SCROLL_PX,
   CURSOR_NEAR,
   EDGE_GAP,
   MAX_DT,
@@ -35,6 +36,7 @@ import {
   pickListTarget,
   poseAt,
   readLine,
+  NEVER_SWITCHED,
   resolveSide,
   sectionProgress,
   sideForGroup,
@@ -359,7 +361,7 @@ test("左の目標は右の鏡で、中立位置は余白の中央どうしの�
   }
 });
 
-test("側は h2 を通った個数の偶奇で決まり、幅 1100px 以下では常に右で、広がる方向にだけ渡る", () => {
+test("側は h2 と h3 を通った個数の偶奇で決まり、幅 1100px 以下では常に右で、広がる方向にだけ渡る", () => {
   for (const width of [1280, 1600, 1920]) {
     assert.deepEqual([0, 1, 2, 3, 4].map((n) => sideForGroup(n, width)), ["right", "left", "right", "left", "right"]);
   }
@@ -375,37 +377,68 @@ test("側は h2 を通った個数の偶奇で決まり、幅 1100px 以下で�
   assert.ok(crossesFrom > 1100 && crossesFrom <= 1280, `渡り始める幅 ${crossesFrom}`);
 });
 
-test("h1 と h3 の境目では側が変わらず、h2 を 1 つ通ると変わり、2 つ通ると戻る", () => {
-  const side = (heads: string[], at: number) => sideForGroup(sideGroups(heads.map((h) => h === "h2"))[at], 1280);
-  const heads = ["h1", "h3", "h3", "h3", "h2", "h3", "h3", "h2", "h3"];
-  const sides = heads.map((_, i) => side(heads, i));
-  assert.deepEqual(sides, ["right", "right", "right", "right", "left", "left", "left", "right", "right"]);
+test("側は h1 を数えず、h2 と h3 を通るたびに右、左、右、左と変わる", () => {
+  const sides = (heads: string[], width = 1280) =>
+    sideGroups(heads.map((h) => h === "h2" || h === "h3")).map((g) => sideForGroup(g, width));
+  assert.deepEqual(sides(["h1", "h3", "h3", "h3"]), ["right", "left", "right", "left"]);
+  assert.deepEqual(sides(["h1", "h2", "h3", "h2"]), ["right", "left", "right", "left"]);
+  assert.deepEqual(sides(["h1"]), ["right"], "タイトルから最初の見出しの前までは右");
+  assert.deepEqual(sides(["h1", "h3", "h3", "h3"], 1100), ["right", "right", "right", "right"]);
   assert.deepEqual(sideGroups([]), []);
-  assert.deepEqual(sideGroups([false, false, false]), [0, 0, 0], "h2 の無い記事や一覧は常に 0 で渡らない");
+  assert.deepEqual(sideGroups([false, false, false]), [0, 0, 0], "一覧は常に 0 で渡らない");
 });
 
-test("側の切り替えは前回から 600ms 以上たった後だけで、断られても時刻は動かない", () => {
-  const first: SideState = { side: "right", switchedAtMs: -Infinity };
-  const a = resolveSide(first, "left", 0);
-  assert.deepEqual(a, { side: "left", switchedAtMs: 0 }, "最初の切り替えはすぐ通る");
-  assert.equal(resolveSide(a, "right", CROSS_COOLDOWN_MS - 1), a, "599ms では戻れない");
-  assert.deepEqual(resolveSide(a, "right", CROSS_COOLDOWN_MS), { side: "right", switchedAtMs: CROSS_COOLDOWN_MS });
-  assert.equal(resolveSide(a, "left", 5), a, "同じ側なら何もしない");
-  assert.equal(resolveSide(a, "left", 100000), a, "同じ側なら時刻も動かない");
+const fresh: SideState = NEVER_SWITCHED;
+const switched = (side: Side, ms: number, scrollY: number): SideState => ({
+  side,
+  switchedAtMs: ms,
+  switchedAtScrollY: scrollY,
 });
 
-test("速い切り替えが続いても、側の変更は 600ms あき、静まれば望む側に追いつく", () => {
-  let st: SideState = { side: "right", switchedAtMs: -Infinity };
-  const switches: number[] = [];
-  for (let t = 0; t <= 3000; t += 16) {
-    const group = t < 2000 ? Math.floor(t / 100) : 20;
-    const next = resolveSide(st, sideForGroup(group, 1280), t);
-    if (next.side !== st.side) switches.push(t);
+test("最初の切り替えは、時刻もスクロール位置も制限なしで通る", () => {
+  assert.deepEqual(resolveSide(fresh, "left", 0, 0), switched("left", 0, 0));
+  assert.deepEqual(resolveSide(fresh, "left", 5, 3000), switched("left", 5, 3000));
+  assert.equal(resolveSide(fresh, "right", 0, 0), fresh, "同じ側なら何もしない");
+});
+
+test("切り替えは前回から 600ms と 600px の両方を満たした後だけ", () => {
+  const a = switched("left", 1000, 2000);
+  const ms = CROSS_COOLDOWN_MS;
+  const px = CROSS_MIN_SCROLL_PX;
+  assert.equal(resolveSide(a, "right", 1000 + ms - 1, 2000 + px), a, "600ms 未満なら変わらない");
+  assert.equal(resolveSide(a, "right", 1000 + ms, 2000 + px - 1), a, "600px 未満なら変わらない");
+  assert.equal(resolveSide(a, "right", 1000 + 60000, 2000), a, "時間がいくらたっても動かなければ変わらない");
+  assert.deepEqual(resolveSide(a, "right", 1000 + ms, 2000 + px), switched("right", 1000 + ms, 2000 + px));
+  assert.deepEqual(resolveSide(a, "right", 1000 + ms, 2000 - px), switched("right", 1000 + ms, 2000 - px), "上へ戻っても距離で数える");
+  assert.equal(resolveSide(a, "left", 1000 + 60000, 9000), a, "同じ側なら基準も動かない");
+});
+
+test("変わらなかった試みは基準を動かさず、溜まった差は静まった後に追いつく", () => {
+  let st = switched("left", 0, 0);
+  const attempts: [number, number][] = [[100, 300], [400, 650], [599, 900]];
+  for (const [ms, y] of attempts) {
+    st = resolveSide(st, "right", ms, y);
+    assert.deepEqual(st, switched("left", 0, 0), `${ms}ms ${y}px では基準が動かない`);
+  }
+  assert.deepEqual(resolveSide(st, "right", 700, 900), switched("right", 700, 900));
+});
+
+test("速くスクロールして見出しが続いても、側の変更は 600ms と 600px あき、静まれば望む側に追いつく", () => {
+  let st = fresh;
+  const switches: { ms: number; y: number }[] = [];
+  for (let t = 0; t <= 6000; t += 16) {
+    const y = Math.min(t, 2000) * 1.5;
+    const group = Math.floor(y / 150);
+    const next = resolveSide(st, sideForGroup(group, 1280), t, y);
+    if (next.side !== st.side) switches.push({ ms: t, y });
     st = next;
   }
   assert.ok(switches.length >= 3);
-  for (let i = 1; i < switches.length; i++) assert.ok(switches[i] - switches[i - 1] >= CROSS_COOLDOWN_MS);
-  assert.equal(st.side, "right", "止まれば、h2 の個数の偶奇の側に落ち着く");
+  for (let i = 1; i < switches.length; i++) {
+    assert.ok(switches[i].ms - switches[i - 1].ms >= CROSS_COOLDOWN_MS);
+    assert.ok(Math.abs(switches[i].y - switches[i - 1].y) >= CROSS_MIN_SCROLL_PX);
+  }
+  assert.equal(st.side, sideForGroup(Math.floor(3000 / 150), 1280), "止まれば、見出しの個数の偶奇の側に落ち着く");
 });
 
 test("左の姿勢は右の鏡: 視線 x、傾き、横ずれの符号が反転し、大きさと視線 y は同じ", () => {

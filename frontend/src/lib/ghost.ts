@@ -219,10 +219,11 @@ export function aimFor(reduced: boolean, width: number, side: Side, block: numbe
 
 export const CROSS_SIDES_MIN_WIDTH = 1200;
 export const CROSS_COOLDOWN_MS = 600;
+export const CROSS_MIN_SCROLL_PX = 600;
 
-export function sideGroups(isH2: readonly boolean[]): number[] {
+export function sideGroups(isBoundary: readonly boolean[]): number[] {
   let seen = 0;
-  return isH2.map((h2) => (h2 ? ++seen : seen));
+  return isBoundary.map((boundary) => (boundary ? ++seen : seen));
 }
 
 export function sideForGroup(group: number, width: number): Side {
@@ -233,11 +234,16 @@ export function sideForGroup(group: number, width: number): Side {
 export interface SideState {
   side: Side;
   switchedAtMs: number;
+  switchedAtScrollY: number;
 }
 
-export function resolveSide(prev: SideState, desired: Side, now: number): SideState {
-  if (desired === prev.side || now - prev.switchedAtMs < CROSS_COOLDOWN_MS) return prev;
-  return { side: desired, switchedAtMs: now };
+export const NEVER_SWITCHED: SideState = { side: "right", switchedAtMs: -Infinity, switchedAtScrollY: -Infinity };
+
+export function resolveSide(prev: SideState, desired: Side, now: number, scrollY: number): SideState {
+  if (desired === prev.side) return prev;
+  if (now - prev.switchedAtMs < CROSS_COOLDOWN_MS) return prev;
+  if (Math.abs(scrollY - prev.switchedAtScrollY) < CROSS_MIN_SCROLL_PX) return prev;
+  return { side: desired, switchedAtMs: now, switchedAtScrollY: scrollY };
 }
 
 export function crossProgress(from: number, to: number, x: number): number {

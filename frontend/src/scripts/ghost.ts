@@ -8,6 +8,7 @@ import {
   HOP_SINK_PX,
   MAX_DT,
   NEUTRAL_POSE,
+  NEVER_SWITCHED,
   SPRINGS,
   aimFor,
   arcLift,
@@ -69,7 +70,7 @@ function measure(): Layout {
     const tops = heads.map(docTop);
     const end = docTop(post) + post.offsetHeight;
     const spans = tops.map((top, i) => ({ top, bottom: tops[i + 1] ?? end }));
-    const sideGroup = sideGroups(heads.map((h) => h.tagName === "H2"));
+    const sideGroup = sideGroups(heads.map((h) => h.tagName === "H2" || h.tagName === "H3"));
     return { kind: "article", tops, spans, sideGroup };
   }
   return { kind: "none" };
@@ -123,7 +124,7 @@ export function initGhost(): void {
   const scale: Spring = { x: 1, v: 0 };
   const hop: Spring = { x: 0, v: 0 };
   const xs: Spring = { x: 0, v: 0 };
-  let sideState: SideState = { side: "right", switchedAtMs: -Infinity };
+  let sideState: SideState = NEVER_SWITCHED;
   let crossing = false;
   let crossFrom = 0;
   let lastWidth = 0;
@@ -182,7 +183,7 @@ export function initGhost(): void {
     const w = width();
     lastWidth = w;
     block = t.block;
-    sideState = { side: sideForGroup(t.group, w), switchedAtMs: sideState.switchedAtMs };
+    sideState = { ...sideState, side: sideForGroup(t.group, w) };
     crossing = false;
     const aim = aimFor(reduced.matches, w, sideState.side, t.block, t.progress);
     pose = aim.pose;
@@ -212,7 +213,7 @@ export function initGhost(): void {
     }
     const w = width();
     const desiredSide = sideForGroup(t.group, w);
-    const resolved = resolveSide(sideState, desiredSide, now);
+    const resolved = resolveSide(sideState, desiredSide, now, scrollY);
     if (resolved !== sideState) {
       sideState = resolved;
       crossing = true;
