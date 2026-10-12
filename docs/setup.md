@@ -6,7 +6,7 @@
 
 | コピー先 | 元 | 書く内容 |
 |---|---|---|
-| `backend/wrangler.toml` | `wrangler.toml.example` | D1 の `database_id`、`CORS_ALLOW_ORIGIN`（フロントの URL） |
+| `backend/wrangler.toml` | `wrangler.toml.example` | D1 の `database_id`、`CORS_ALLOW_ORIGIN`（フロントの URL）、`IMAGE_BASE_URL`（画像の URL） |
 | `backend/.dev.vars` | `.dev.vars.example` | ローカル用の `ADMIN_TOKEN` |
 | `frontend/.env` | `.env.example` | `PUBLIC_API_URL`、`PUBLIC_IMAGE_BASE_URL`、`PUBLIC_SITE_TITLE` |
 

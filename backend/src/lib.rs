@@ -1,16 +1,18 @@
+mod images;
 mod util;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use util::{
-    constant_time_eq, epoch_to_iso, first_image_url, is_valid_slug, iso_to_epoch, make_excerpt,
-    slug_from_published_at,
+    constant_time_eq, epoch_to_iso, first_image_url, is_valid_slug, iso_to_epoch, like_pattern,
+    make_excerpt, slug_from_published_at,
 };
 use worker::wasm_bindgen::JsValue;
 use worker::*;
 
 const DEFAULT_LIMIT: i64 = 20;
 const MAX_LIMIT: i64 = 50;
+const MAX_SLUG_SUFFIX: i64 = 20;
 
 // ---- JSON の型 ------------------------------------------------------------
 
@@ -56,7 +58,7 @@ impl From<PostSummaryRow> for PostSummary {
 }
 
 /// 詳細用。
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 struct Post {
     id: i64,
     slug: String,
@@ -65,10 +67,50 @@ struct Post {
     excerpt: String,
     status: String,
     published_at: String,
+    created_at: String,
     updated_at: String,
     legacy_url: Option<String>,
-    #[serde(default)]
+    /// true なら slug は変わらない。false の下書きは初回公開で作り直される。
+    slug_fixed: bool,
+    /// true なら公開日時は手で決められておらず、初回公開の瞬間が入る（`published_at` は仮の値）。
+    date_unset: bool,
     categories: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct PostRow {
+    id: i64,
+    slug: String,
+    title: String,
+    content: String,
+    excerpt: String,
+    status: String,
+    published_at: String,
+    created_at: String,
+    updated_at: String,
+    legacy_url: Option<String>,
+    slug_fixed: i64,
+}
+
+impl From<PostRow> for Post {
+    fn from(row: PostRow) -> Self {
+        let slug_fixed = row.slug_fixed != 0;
+        Post {
+            date_unset: !slug_fixed && row.published_at == row.created_at,
+            slug_fixed,
+            id: row.id,
+            slug: row.slug,
+            title: row.title,
+            content: row.content,
+            excerpt: row.excerpt,
+            status: row.status,
+            published_at: row.published_at,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            legacy_url: row.legacy_url,
+            categories: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -81,6 +123,8 @@ struct PostInput {
     slug: Option<String>,
     /// 作成時の既定は空。更新時に省略すれば今のカテゴリのまま（`[]` を渡すと全部外す）。
     categories: Option<Vec<String>>,
+    /// 更新時だけ。今の `updated_at` と違えば、他で更新されたとして 409 を返す。
+    expected_updated_at: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -109,11 +153,11 @@ fn num(n: i64) -> JsValue {
     JsValue::from_f64(n as f64)
 }
 
-fn json_error(message: &str, status: u16) -> Result<Response> {
+pub(crate) fn json_error(message: &str, status: u16) -> Result<Response> {
     Response::from_json(&json!({ "error": message })).map(|r| r.with_status(status))
 }
 
-fn is_admin(req: &Request, env: &Env) -> bool {
+pub(crate) fn is_admin(req: &Request, env: &Env) -> bool {
     let Ok(Some(header)) = req.headers().get("Authorization") else {
         return false;
     };
@@ -219,6 +263,18 @@ async fn attach_categories(d1: &D1Database, posts: &mut [PostSummary]) -> Result
 
 // ---- ハンドラ ------------------------------------------------------------
 
+/// 一覧の `status` の指定。下書きが見えるのは管理者だけなので、管理者以外は無視する。
+fn status_filter(req: &Request, is_admin: bool) -> Result<String> {
+    let status = query_param(req, "status")?.unwrap_or_default();
+    Ok(
+        if is_admin && (status == "draft" || status == "published") {
+            status
+        } else {
+            String::new()
+        },
+    )
+}
+
 async fn list_posts(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let include_drafts = is_admin(&req, &ctx.env);
     let page = query_param(&req, "page")?
@@ -230,34 +286,59 @@ async fn list_posts(req: Request, ctx: RouteContext<()>) -> Result<Response> {
         .unwrap_or(DEFAULT_LIMIT)
         .clamp(1, MAX_LIMIT);
     let category = query_param(&req, "category")?.unwrap_or_default();
+    let status = status_filter(&req, include_drafts)?;
+    let title_query = if include_drafts {
+        query_param(&req, "q")?
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    } else {
+        String::new()
+    };
+    let title_pattern = if title_query.is_empty() {
+        String::new()
+    } else {
+        like_pattern(&title_query)
+    };
 
-    let filter = "(? = 1 OR p.status = 'published') AND (? = '' OR p.id IN \
+    let filter = "(? = 1 OR p.status = 'published') AND (? = '' OR p.status = ?) \
+                  AND (? = '' OR p.title LIKE ? ESCAPE '\\') AND (? = '' OR p.id IN \
                   (SELECT pc.post_id FROM post_categories pc \
                    JOIN categories c ON c.id = pc.category_id WHERE c.name = ?))";
-    let draft_flag = num(include_drafts as i64);
+    let filter_binds = vec![
+        num(include_drafts as i64),
+        text(&status),
+        text(&status),
+        text(&title_pattern),
+        text(&title_pattern),
+        text(&category),
+        text(&category),
+    ];
     let d1 = ctx.env.d1("DB")?;
 
     let total: Option<Count> = d1
         .prepare(format!(
             "SELECT COUNT(*) AS total FROM posts p WHERE {filter}"
         ))
-        .bind(&[draft_flag.clone(), text(&category), text(&category)])?
+        .bind(&filter_binds)?
         .first(None)
         .await?;
 
+    // 管理者には下書きを先頭に出す。バインドの順番は SQL の `?` の順（絞り込み、並び順、ページ）
+    let mut binds = filter_binds;
+    binds.extend([
+        num(include_drafts as i64),
+        num(limit),
+        num((page - 1) * limit),
+    ]);
     let rows: Vec<PostSummaryRow> = d1
         .prepare(format!(
             "SELECT p.id, p.slug, p.title, p.content, p.excerpt, p.status, p.published_at \
-             FROM posts p \
-             WHERE {filter} ORDER BY p.published_at DESC, p.id DESC LIMIT ? OFFSET ?"
+             FROM posts p WHERE {filter} \
+             ORDER BY CASE WHEN ? = 1 AND p.status = 'draft' THEN 0 ELSE 1 END, \
+             p.published_at DESC, p.id DESC LIMIT ? OFFSET ?"
         ))
-        .bind(&[
-            draft_flag,
-            text(&category),
-            text(&category),
-            num(limit),
-            num((page - 1) * limit),
-        ])?
+        .bind(&binds)?
         .all()
         .await?
         .results()?;
@@ -278,17 +359,19 @@ async fn fetch_post(
     key: JsValue,
     include_drafts: bool,
 ) -> Result<Option<Post>> {
-    let post: Option<Post> = d1
+    let row: Option<PostRow> = d1
         .prepare(format!(
-            "SELECT id, slug, title, content, excerpt, status, published_at, updated_at, legacy_url \
+            "SELECT id, slug, title, content, excerpt, status, published_at, created_at, \
+             updated_at, legacy_url, slug_fixed \
              FROM posts WHERE {where_sql} AND (? = 1 OR status = 'published')"
         ))
         .bind(&[key, num(include_drafts as i64)])?
         .first(None)
         .await?;
-    let Some(mut post) = post else {
+    let Some(row) = row else {
         return Ok(None);
     };
+    let mut post = Post::from(row);
     let rows: Vec<CategoryRow> = d1
         .prepare(
             "SELECT pc.post_id AS post_id, c.name AS name FROM post_categories pc \
@@ -327,7 +410,7 @@ async fn get_post_by_id(req: Request, ctx: RouteContext<()>) -> Result<Response>
     }
 }
 
-async fn list_categories(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
+async fn list_categories(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     #[derive(Serialize, Deserialize)]
     struct CategoryCount {
         name: String,
@@ -338,13 +421,38 @@ async fn list_categories(_req: Request, ctx: RouteContext<()>) -> Result<Respons
         .prepare(
             "SELECT c.name AS name, COUNT(p.id) AS count FROM categories c \
              JOIN post_categories pc ON pc.category_id = c.id \
-             JOIN posts p ON p.id = pc.post_id AND p.status = 'published' \
+             JOIN posts p ON p.id = pc.post_id AND (? = 1 OR p.status = 'published') \
              GROUP BY c.id ORDER BY count DESC, c.name",
         )
+        .bind(&[num(is_admin(&req, &ctx.env) as i64)])?
         .all()
         .await?
         .results()?;
     Response::from_json(&json!({ "categories": categories }))
+}
+
+/// `base` が空いていればそれを、使われていれば `base_1`、`base_2` … を返す。`exclude_id` の記事自身は衝突とみなさない。
+async fn unique_slug(
+    d1: &D1Database,
+    base: &str,
+    exclude_id: Option<i64>,
+) -> Result<Option<String>> {
+    for n in 0..=MAX_SLUG_SUFFIX {
+        let candidate = if n == 0 {
+            base.to_string()
+        } else {
+            format!("{base}_{n}")
+        };
+        let taken: Option<IdRow> = d1
+            .prepare("SELECT id FROM posts WHERE slug = ? AND id != ?")
+            .bind(&[text(&candidate), num(exclude_id.unwrap_or(-1))])?
+            .first(None)
+            .await?;
+        if taken.is_none() {
+            return Ok(Some(candidate));
+        }
+    }
+    Ok(None)
 }
 
 async fn create_post(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -359,37 +467,50 @@ async fn create_post(mut req: Request, ctx: RouteContext<()>) -> Result<Response
         return json_error(message, 400);
     }
 
-    let published_at = input.published_at.clone().unwrap_or_else(now_iso);
-    let slug = match &input.slug {
-        Some(s) => s.clone(),
-        None => match slug_from_published_at(&published_at) {
-            Some(s) => s,
-            None => return json_error("could not build a slug", 400),
-        },
-    };
-
+    let now = now_iso();
+    let published_at = input.published_at.clone().unwrap_or_else(|| now.clone());
+    let status = input.status.as_deref().unwrap_or("draft");
     let d1 = ctx.env.d1("DB")?;
-    let exists: Option<IdRow> = d1
-        .prepare("SELECT id FROM posts WHERE slug = ?")
-        .bind(&[text(&slug)])?
-        .first(None)
-        .await?;
-    if exists.is_some() {
-        return json_error("slug already exists", 409);
-    }
+    let slug = match &input.slug {
+        Some(s) => {
+            let exists: Option<IdRow> = d1
+                .prepare("SELECT id FROM posts WHERE slug = ?")
+                .bind(&[text(s)])?
+                .first(None)
+                .await?;
+            if exists.is_some() {
+                return json_error("slug already exists", 409);
+            }
+            s.clone()
+        }
+        None => {
+            let Some(base) = slug_from_published_at(&published_at) else {
+                return json_error("could not build a slug", 400);
+            };
+            match unique_slug(&d1, &base, None).await? {
+                Some(s) => s,
+                None => return json_error("could not build a unique slug", 409),
+            }
+        }
+    };
+    // 下書きの slug は仮のもの。公開済みで作るか slug を指定したときだけ固定する
+    let slug_fixed = input.slug.is_some() || status == "published";
 
     let mut statements = vec![d1
         .prepare(
-            "INSERT INTO posts (slug, title, content, excerpt, status, published_at) \
-             VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO posts (slug, title, content, excerpt, status, published_at, \
+             created_at, updated_at, slug_fixed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&[
             text(&slug),
             text(input.title.trim()),
             text(&input.content),
             text(&make_excerpt(&input.content, 120)),
-            text(input.status.as_deref().unwrap_or("draft")),
+            text(status),
             text(&published_at),
+            text(&now),
+            text(&now),
+            num(slug_fixed as i64),
         ])?];
     statements.extend(category_statements(
         &d1,
@@ -405,7 +526,8 @@ async fn create_post(mut req: Request, ctx: RouteContext<()>) -> Result<Response
         .first(None)
         .await?;
     let id = created.map(|r| r.id).unwrap_or(0);
-    Response::from_json(&json!({ "id": id, "slug": slug })).map(|r| r.with_status(201))
+    Response::from_json(&json!({ "id": id, "slug": slug, "updated_at": now }))
+        .map(|r| r.with_status(201))
 }
 
 async fn update_post(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -427,28 +549,55 @@ async fn update_post(mut req: Request, ctx: RouteContext<()>) -> Result<Response
     let Some(current) = fetch_post(&d1, "id = ?", num(id), true).await? else {
         return json_error("Not Found", 404);
     };
-    // 省略された項目（slug、published_at、status、categories）は今の値のままにする
-    let slug = input.slug.clone().unwrap_or(current.slug.clone());
-    let published_at = input
-        .published_at
-        .clone()
-        .unwrap_or(current.published_at.clone());
+    // バッチより前に確かめる。バッチの中で食い違うと、本体の UPDATE が空振りしてもカテゴリの書き換えだけ走る
+    if let Some(expected) = &input.expected_updated_at {
+        if *expected != current.updated_at {
+            return Response::from_json(&json!({
+                "error": "post was updated elsewhere",
+                "updated_at": current.updated_at,
+            }))
+            .map(|r| r.with_status(409));
+        }
+    }
+
+    let status = input.status.as_deref().unwrap_or(&current.status);
+    let first_publish = status == "published" && !current.slug_fixed;
+    let now = now_iso();
+    // 省略された項目は今の値のまま。ただし初回公開で日時が手で決められていなければ、公開の瞬間を入れる
+    let published_at = match (&input.published_at, first_publish && current.date_unset) {
+        (Some(at), _) => at.clone(),
+        (None, true) => now.clone(),
+        (None, false) => current.published_at.clone(),
+    };
+    let slug = match &input.slug {
+        Some(s) => s.clone(),
+        None if first_publish => {
+            let Some(base) = slug_from_published_at(&published_at) else {
+                return json_error("could not build a slug", 400);
+            };
+            match unique_slug(&d1, &base, Some(id)).await? {
+                Some(s) => s,
+                None => return json_error("could not build a unique slug", 409),
+            }
+        }
+        None => current.slug.clone(),
+    };
     if slug != current.slug {
         let taken: Option<IdRow> = d1
-            .prepare("SELECT id FROM posts WHERE slug = ?")
-            .bind(&[text(&slug)])?
+            .prepare("SELECT id FROM posts WHERE slug = ? AND id != ?")
+            .bind(&[text(&slug), num(id)])?
             .first(None)
             .await?;
         if taken.is_some() {
             return json_error("slug already exists", 409);
         }
     }
+    let slug_fixed = current.slug_fixed || first_publish || input.slug.is_some();
 
-    let status = input.status.as_deref().unwrap_or(&current.status);
     let mut statements = vec![d1
         .prepare(
             "UPDATE posts SET slug = ?, title = ?, content = ?, excerpt = ?, status = ?, \
-             published_at = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?",
+             published_at = ?, slug_fixed = ?, updated_at = ? WHERE id = ?",
         )
         .bind(&[
             text(&slug),
@@ -457,6 +606,8 @@ async fn update_post(mut req: Request, ctx: RouteContext<()>) -> Result<Response
             text(&make_excerpt(&input.content, 120)),
             text(status),
             text(&published_at),
+            num(slug_fixed as i64),
+            text(&now),
             num(id),
         ])?];
     // categories を省略したときは今のカテゴリを触らない
@@ -469,7 +620,7 @@ async fn update_post(mut req: Request, ctx: RouteContext<()>) -> Result<Response
     }
     d1.batch(statements).await?;
 
-    Response::from_json(&json!({ "id": id, "slug": slug }))
+    Response::from_json(&json!({ "id": id, "slug": slug, "updated_at": now }))
 }
 
 async fn delete_post(req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -534,6 +685,7 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
         .post_async("/api/posts", create_post)
         .put_async("/api/posts/:id", update_post)
         .delete_async("/api/posts/:id", delete_post)
+        .post_async("/api/images", images::upload_image)
         .run(req, env.clone())
         .await;
 

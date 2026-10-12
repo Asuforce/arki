@@ -282,6 +282,82 @@ pub fn constant_time_eq(a: &str, b: &str) -> bool {
     diff == 0
 }
 
+/// タイトル検索の LIKE パターンにする。`%` `_` `\` は文字そのものとして扱う（`ESCAPE '\'` と組で使う）。
+pub fn like_pattern(query: &str) -> String {
+    let mut pattern = String::from("%");
+    for c in query.chars() {
+        if matches!(c, '%' | '_' | '\\') {
+            pattern.push('\\');
+        }
+        pattern.push(c);
+    }
+    pattern.push('%');
+    pattern
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImageKind {
+    Png,
+    Jpeg,
+    Gif,
+    Webp,
+}
+
+/// 先頭のバイト列から画像の種類を決める。`Content-Type` は信用しない。SVG は対象外。
+pub fn sniff_image(bytes: &[u8]) -> Option<ImageKind> {
+    if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]) {
+        Some(ImageKind::Png)
+    } else if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        Some(ImageKind::Jpeg)
+    } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        Some(ImageKind::Gif)
+    } else if bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        Some(ImageKind::Webp)
+    } else {
+        None
+    }
+}
+
+/// アニメーションを持つ PNG（APNG）か WebP か。静止画への変換で動きが消えるので、そのまま保存する側が使う。
+pub fn is_animated(bytes: &[u8], kind: ImageKind) -> bool {
+    match kind {
+        ImageKind::Gif => true,
+        ImageKind::Png => {
+            // acTL は最初の IDAT より前に置かれる
+            let idat = find(bytes, b"IDAT").unwrap_or(bytes.len());
+            find(&bytes[..idat], b"acTL").is_some()
+        }
+        // VP8X チャンクのフラグの 0x02 がアニメーション
+        ImageKind::Webp => bytes.len() > 20 && &bytes[12..16] == b"VP8X" && bytes[20] & 0x02 != 0,
+        ImageKind::Jpeg => false,
+    }
+}
+
+fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack.windows(needle.len()).position(|w| w == needle)
+}
+
+/// 変換後の `Content-Type` に合う拡張子。
+pub fn image_extension(content_type: &str) -> Option<&'static str> {
+    match content_type {
+        "image/avif" => Some("avif"),
+        "image/webp" => Some("webp"),
+        "image/jpeg" => Some("jpg"),
+        "image/png" => Some("png"),
+        "image/gif" => Some("gif"),
+        _ => None,
+    }
+}
+
+/// R2 のキー。`now_iso` の年月で分け、`hash` は元の画像の内容から作った値。
+pub fn image_key(now_iso: &str, hash: &str, extension: &str) -> String {
+    format!(
+        "uploads/{}/{}/{hash}.{extension}",
+        &now_iso[0..4],
+        &now_iso[5..7]
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -556,5 +632,66 @@ mod tests {
         assert!(!constant_time_eq("abc", "abd"));
         assert!(!constant_time_eq("abc", "abcd"));
         assert!(!constant_time_eq("", "a"));
+    }
+
+    #[test]
+    fn like_pattern_escapes_wildcards() {
+        assert_eq!(like_pattern("日記"), "%日記%");
+        assert_eq!(like_pattern("100%_a\\b"), "%100\\%\\_a\\\\b%");
+    }
+
+    #[test]
+    fn sniff_ignores_declared_type_and_rejects_svg() {
+        assert_eq!(
+            sniff_image(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0]),
+            Some(ImageKind::Png)
+        );
+        assert_eq!(
+            sniff_image(&[0xFF, 0xD8, 0xFF, 0xE0]),
+            Some(ImageKind::Jpeg)
+        );
+        assert_eq!(sniff_image(b"GIF89a\x01\x00"), Some(ImageKind::Gif));
+        assert_eq!(sniff_image(b"RIFF\0\0\0\0WEBPVP8 "), Some(ImageKind::Webp));
+        assert_eq!(
+            sniff_image(b"<svg xmlns=\"http://www.w3.org/2000/svg\"/>"),
+            None
+        );
+        assert_eq!(sniff_image(b"RIFF\0\0\0\0WAVEfmt "), None);
+        assert_eq!(sniff_image(b""), None);
+    }
+
+    #[test]
+    fn animation_is_detected_per_format() {
+        assert!(is_animated(b"GIF89a", ImageKind::Gif));
+        let apng = [
+            &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A][..],
+            b"....acTL....IDAT",
+        ]
+        .concat();
+        assert!(is_animated(&apng, ImageKind::Png));
+        let png = [
+            &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A][..],
+            b"....IDAT....acTL",
+        ]
+        .concat();
+        assert!(!is_animated(&png, ImageKind::Png));
+
+        let mut webp = b"RIFF\0\0\0\0WEBPVP8X\x0a\0\0\0".to_vec();
+        webp.extend([0x02, 0, 0, 0]);
+        assert!(is_animated(&webp, ImageKind::Webp));
+        webp[20] = 0x10;
+        assert!(!is_animated(&webp, ImageKind::Webp));
+        assert!(!is_animated(&[0xFF, 0xD8, 0xFF], ImageKind::Jpeg));
+    }
+
+    #[test]
+    fn image_key_and_extension() {
+        assert_eq!(
+            image_key("2026-10-12T13:12:58Z", "0123456789abcdef", "avif"),
+            "uploads/2026/10/0123456789abcdef.avif"
+        );
+        assert_eq!(image_extension("image/avif"), Some("avif"));
+        assert_eq!(image_extension("image/jpeg"), Some("jpg"));
+        assert_eq!(image_extension("image/svg+xml"), None);
     }
 }

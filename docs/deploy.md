@@ -25,8 +25,10 @@ cd frontend && npm run build && npx wrangler deploy --config dist/server/wrangle
 | Variable | `ARKI_D1_DATABASE_ID` | D1 データベースの ID |
 | Variable | `ARKI_BLOG_ORIGIN` | ブログの URL（CORS 用、例: `https://blog.example.com`） |
 | Variable | `ARKI_API_URL` | API の URL（独自ドメイン） |
-| Variable | `ARKI_IMAGE_BASE_URL` | 画像配信の URL（任意） |
+| Variable | `ARKI_IMAGE_BASE_URL` | 画像配信の URL（R2 の公開ドメイン。API が画像の URL を作るのに使うので必須） |
 | Variable | `ARKI_SITE_TITLE` | サイト名（任意） |
+
+API の Worker は R2 のバケット `arki-images`（バインディング `IMAGES_BUCKET`）と Images（バインディング `IMAGES`）を使います。デプロイ用のトークンには、これらを持つ Worker をデプロイできる権限が要ります。Images は、アップロードのたびに一意の変換として数えられ、月 5,000 件まで無料です。
 
 `ADMIN_TOKEN` は一度だけ手元で `npx wrangler secret put ADMIN_TOKEN` を実行して設定します（Worker に保存され、デプロイでは消えません）。
 
