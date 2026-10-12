@@ -383,7 +383,6 @@ fn skip_sub_blocks(bytes: &[u8], mut at: usize) -> Option<usize> {
     }
 }
 
-/// 変換後の `Content-Type` に合う拡張子。
 pub fn image_extension(content_type: &str) -> Option<&'static str> {
     match content_type {
         "image/avif" => Some("avif"),
@@ -395,7 +394,7 @@ pub fn image_extension(content_type: &str) -> Option<&'static str> {
     }
 }
 
-/// R2 のキー。`now_iso` の年月で分け、`hash` は元の画像の内容から作った値。
+/// R2 のキー。`now_iso` の年月で分け、`hash` は保存する画像の内容から作った値。
 pub fn image_key(now_iso: &str, hash: &str, extension: &str) -> String {
     format!(
         "uploads/{}/{}/{hash}.{extension}",
