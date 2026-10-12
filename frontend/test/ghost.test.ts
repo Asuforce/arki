@@ -7,13 +7,11 @@ import {
   BLINK_MIN_MS,
   CROSS_ARC_PX,
   CROSS_COOLDOWN_MS,
-  CROSS_SIDES_MIN_WIDTH,
   CURSOR_NEAR,
   EDGE_GAP,
   MAX_DT,
   NEUTRAL_POSE,
   POSES,
-  READ_LINE,
   SPRINGS,
   SWAY_AMP,
   SWAY_CYCLES,
@@ -126,9 +124,15 @@ test("傾きはバネで 0 へ戻る", () => {
   assert.ok(Math.abs(s.x) < 0.1);
 });
 
-test("読み取り線は viewport の高さの 45% で、文書座標になる", () => {
-  assert.equal(READ_LINE, 0.45);
-  assert.equal(readLine(1000, 800), 1000 + 360);
+test("読み取り線は文書座標で、スクロールと同じだけ動き、画面の中の上寄りにある", () => {
+  for (const vh of [500, 800, 1400]) {
+    for (const scrollY of [0, 1000, 25000]) {
+      const line = readLine(scrollY, vh);
+      assert.ok(line > scrollY && line < scrollY + vh / 2 + 1, `viewport の上半分あたり (${vh}, ${scrollY})`);
+      assert.ok(Math.abs(readLine(scrollY + 300, vh) - line - 300) < 1e-9, "スクロールに 1 対 1");
+    }
+    assert.ok(readLine(0, vh) < readLine(0, vh * 2), "画面が高いほど下がる");
+  }
 });
 
 const items = [
@@ -334,7 +338,11 @@ test("x の目標: 幅 1000px ではわずかしか動かず、広いほど動�
   assert.ok(spread(1280) > 30, `1280px で ${spread(1280)}`);
   assert.ok(spread(1600) >= spread(1280));
   assert.ok(spread(1600) <= 2 * SWAY_AMP * X_GAIN_MAX + 1e-6);
-  assert.equal(xTarget(1280, "right", 4, null), ghostX(1280) + POSES[4].x * Math.min(X_GAIN_MAX, xRoom(1280, POSES[4]) / (26 + SWAY_AMP)));
+  for (let block = 0; block < POSES.length; block++) {
+    const offset = xTarget(1280, "right", block, null) - ghostX(1280);
+    assert.equal(Math.sign(offset), Math.sign(POSES[block].x), `block ${block} は姿勢の向きへ寄る`);
+    assert.ok(Math.abs(offset) <= Math.abs(POSES[block].x) * X_GAIN_MAX + 1e-9, `block ${block} は揺れを足さない`);
+  }
 });
 
 test("左の目標は右の鏡で、中立位置は余白の中央どうしの対称", () => {
@@ -350,14 +358,18 @@ test("左の目標は右の鏡で、中立位置は余白の中央どうしの�
   }
 });
 
-test("側は偶数番目が右、奇数番目が左。1200px 未満は常に右", () => {
-  assert.equal(CROSS_SIDES_MIN_WIDTH, 1200);
+test("側は広い画面では偶数番目が右、奇数番目が左。幅 1100px 以下では常に右で、広がる方向にだけ渡る", () => {
   for (let b = 0; b < 10; b++) {
-    assert.equal(sideForBlock(b, 1280), b % 2 === 0 ? "right" : "left");
-    assert.equal(sideForBlock(b, 1200), b % 2 === 0 ? "right" : "left");
-    assert.equal(sideForBlock(b, 1199), "right");
-    assert.equal(sideForBlock(b, 1000), "right");
+    for (const width of [1280, 1600, 1920]) assert.equal(sideForBlock(b, width), b % 2 === 0 ? "right" : "left");
+    for (const width of [985, 1000, 1100]) assert.equal(sideForBlock(b, width), "right");
   }
+  let crossesFrom = Infinity;
+  for (let width = 985; width <= 2000; width++) {
+    const crosses = sideForBlock(1, width) === "left";
+    if (crosses && crossesFrom === Infinity) crossesFrom = width;
+    assert.equal(crosses, width >= crossesFrom, `${width}px で渡る/渡らないが戻っていない`);
+  }
+  assert.ok(crossesFrom > 1100 && crossesFrom <= 1280, `渡り始める幅 ${crossesFrom}`);
 });
 
 test("側の切り替えは前回から 600ms 以上たった後だけで、断られても時刻は動かない", () => {
