@@ -360,9 +360,11 @@ test("左の目標は右の鏡で、中立位置は余白の中央どうしの�
 });
 
 test("側は h2 を通った個数の偶奇で決まり、幅 1100px 以下では常に右で、広がる方向にだけ渡る", () => {
-  for (let n = 0; n < 10; n++) {
-    for (const width of [1280, 1600, 1920]) assert.equal(sideForGroup(n, width), n % 2 === 0 ? "right" : "left");
-    for (const width of [985, 1000, 1100]) assert.equal(sideForGroup(n, width), "right");
+  for (const width of [1280, 1600, 1920]) {
+    assert.deepEqual([0, 1, 2, 3, 4].map((n) => sideForGroup(n, width)), ["right", "left", "right", "left", "right"]);
+  }
+  for (const width of [985, 1000, 1100]) {
+    assert.deepEqual([0, 1, 2, 3, 4].map((n) => sideForGroup(n, width)), ["right", "right", "right", "right", "right"]);
   }
   let crossesFrom = Infinity;
   for (let width = 985; width <= 2000; width++) {
@@ -474,8 +476,9 @@ test("動きを減らさないときの目標は、ブロックと進み具合�
 
 test("一覧でホバーすると、姿勢と高さはホバーしたカードに寄り、無ければ読み取り線のカード", () => {
   const spans = Array.from({ length: 8 }, (_, i) => ({ top: i * 200, bottom: i * 200 + 200 }));
-  for (const line of [10, 250, 620, 1100, 1599, 9999]) {
-    assert.equal(pickListTarget(spans, line, null), pickListBlock(spans, line));
+  const reading: [number, number][] = [[10, 0], [250, 1], [620, 3], [1100, 5], [1599, 7], [9999, 7]];
+  for (const [line, card] of reading) {
+    assert.equal(pickListTarget(spans, line, null), card, `line ${line}`);
     for (let hovered = 0; hovered < spans.length; hovered++) assert.equal(pickListTarget(spans, line, hovered), hovered);
   }
   assert.equal(pickListTarget(spans, -50, null), 0, "先頭より上でも先頭");
