@@ -6,7 +6,6 @@
   --ghost-w: 72px;
 }
 
-/* 明るい地では白い星が見えないので黒にし、本文の邪魔にならないよう薄くする */
 :root[data-theme="light"] {
   --star: 0 0 0;
   --star-a: 0.55;
@@ -37,7 +36,6 @@
   transition: transform 350ms var(--ease);
 }
 
-/* 漂いの振幅は --float (0 から 1) に比例する。止まっているときだけ 1 にして、動いている間は弱める */
 @property --float {
   syntax: "<number>";
   inherits: true;
@@ -54,19 +52,15 @@
     width: var(--ghost-w);
     opacity: 0;
     pointer-events: none;
-    transition: --float 800ms var(--ease);
+    transition: --float 800ms var(--ease), opacity 200ms var(--ease);
   }
-  /* 位置は JS が transform に書くので、登場は translate で重ねる */
-  .ghost-float[data-ready] { animation: ghost-enter 700ms var(--ease) both; }
-  /* 周期の違う 2 つの上下を重ねて、単調な往復に見せない */
+  .ghost-float[data-ready] { opacity: 1; animation: ghost-enter 700ms var(--ease) backwards; }
+  .ghost-float[data-ready][data-crossing] { opacity: 0.45; }
   .ghost-float svg {
     animation:
       ghost-bob 6.4s ease-in-out infinite,
       ghost-bob-fine 4.3s ease-in-out infinite;
-    transition: opacity 200ms var(--ease);
   }
-  /* 渡っている間は本文が隠れすぎないよう薄くする。登場の animation が .ghost-float の opacity を握っているので svg 側で下げる */
-  .ghost-float[data-crossing] svg { opacity: 0.45; }
 }
 
 @media (max-width: 999.98px) {

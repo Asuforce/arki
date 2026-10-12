@@ -7,7 +7,6 @@ export interface Star {
 
 export const STAR_COUNT = 190;
 
-/** official と同じ種と順序で引くので、同じ空になる。座標は 0 から 1 に正規化してあり、画面の大きさで変わらない。 */
 export function makeStars(count: number = STAR_COUNT): Star[] {
   let seed = 0x9e3779b9;
   const random = (): number => {
@@ -28,7 +27,6 @@ export function makeStars(count: number = STAR_COUNT): Star[] {
 }
 
 export const COLUMN_W = 760;
-/** これ以上で、本文の列の右の余白にゴーストを置く。余白は (幅 - 760) / 2 で、1000px のとき 120px。 */
 export const WIDE_MIN = 1000;
 export const GHOST_W = 72;
 export const GHOST_ASPECT = 392 / 439;
@@ -36,7 +34,6 @@ export const NAV_H = 56;
 
 export type Side = "right" | "left";
 
-/** 中立位置 (ゴーストの中心の x)。余白の中央で、左は右の鏡。 */
 export function ghostX(width: number, side: Side = "right"): number {
   const columnRight = (width + COLUMN_W) / 2;
   const right = (columnRight + width) / 2;

@@ -3,6 +3,14 @@ import { initGhost } from "./ghost";
 
 type Theme = "light" | "dark";
 
+function rememberTheme(theme: Theme): void {
+  try {
+    localStorage.setItem("theme", theme);
+  } catch {
+    return;
+  }
+}
+
 function initTheme(): void {
   const root = document.documentElement;
   const toggle = document.getElementById("theme-toggle");
@@ -20,11 +28,7 @@ function initTheme(): void {
   toggle?.addEventListener("click", () => {
     const next: Theme = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
     apply(next);
-    try {
-      localStorage.setItem("theme", next);
-    } catch {
-      // 保存できなくても、この訪問の間は選んだテーマのまま
-    }
+    rememberTheme(next);
   });
 }
 

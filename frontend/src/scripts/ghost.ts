@@ -34,8 +34,7 @@ import {
 import { GHOST_W, WIDE_MIN, ghostX } from "../lib/world";
 
 const PUPIL_REACH = 8;
-/** スクロール速度を平滑にする時定数の逆数 (1/s)。ホイールの 1 目盛りごとの飛びを均す */
-const SCROLL_SMOOTH = 10;
+const SCROLL_SMOOTH_PER_S = 10;
 const SCROLL_REST = 5;
 
 type Layout =
@@ -107,7 +106,7 @@ export function initGhost(): void {
   const scale: Spring = { x: 1, v: 0 };
   const hop: Spring = { x: 0, v: 0 };
   const xs: Spring = { x: 0, v: 0 };
-  let sideState: SideState = { side: "right", switchedAt: -Infinity };
+  let sideState: SideState = { side: "right", switchedAtMs: -Infinity };
   let crossing = false;
   let crossFrom = 0;
   let lastWidth = 0;
@@ -164,7 +163,7 @@ export function initGhost(): void {
   const snapX = (t: { block: number; progress: number | null }): void => {
     const w = width();
     lastWidth = w;
-    sideState = { side: sideForBlock(t.block, w), switchedAt: sideState.switchedAt };
+    sideState = { side: sideForBlock(t.block, w), switchedAtMs: sideState.switchedAtMs };
     crossing = false;
     xs.x = xTarget(w, sideState.side, t.block, t.progress);
     xs.v = 0;
@@ -189,7 +188,7 @@ export function initGhost(): void {
     const scrollY = window.scrollY;
     const raw = real > 0 ? (scrollY - lastScroll) / real : 0;
     lastScroll = scrollY;
-    scrollVel += (raw - scrollVel) * Math.min(1, real * SCROLL_SMOOTH);
+    scrollVel += (raw - scrollVel) * Math.min(1, real * SCROLL_SMOOTH_PER_S);
 
     const t = target(ghost.offsetHeight);
     if (t.block !== block) {
@@ -216,9 +215,8 @@ export function initGhost(): void {
       }
     }
 
-    // 縦の速度の傾きは本文の側へ振れるよう左で反転し、横の速度の傾きは画面の向きのまま
-    const lean = sideState.side === "right" ? 1 : -1;
-    const tiltTarget = pose.tilt + lean * tiltFromVelocity(scrollVel + y.v) + tiltFromHorizontalVelocity(xs.v);
+    const towardColumn = sideState.side === "right" ? 1 : -1;
+    const tiltTarget = pose.tilt + towardColumn * tiltFromVelocity(scrollVel + y.v) + tiltFromHorizontalVelocity(xs.v);
     Object.assign(xs, springStep(xs, tx, dt, SPRINGS.x));
     Object.assign(tilt, springStep(tilt, tiltTarget, dt, SPRINGS.tilt));
     Object.assign(y, springStep(y, t.y, dt, SPRINGS.y));
@@ -266,7 +264,7 @@ export function initGhost(): void {
     const t = target(ghost.offsetHeight);
     block = t.block;
     lastWidth = width();
-    sideState = { side: "right", switchedAt: -Infinity };
+    sideState = { side: "right", switchedAtMs: -Infinity };
     crossing = false;
     xs.x = ghostX(lastWidth);
     xs.v = 0;

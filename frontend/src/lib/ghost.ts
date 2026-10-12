@@ -7,7 +7,6 @@ export interface Gaze {
   y: number;
 }
 
-/** tilt は度、gaze は瞳の基準の寄り (SVG の単位)、x は中立位置からの横ずれ (px、正が画面の右)。 */
 export interface Pose {
   x: number;
   tilt: number;
@@ -15,10 +14,6 @@ export interface Pose {
   gaze: Gaze;
 }
 
-/**
- * 本文は列の左にあるので、基本は左向き。隣り合う姿勢 (末尾と先頭も) は傾きが 6 度以上、横ずれが 16px 以上離れる。
- * scale は 0.9 から 1.1 に収める。x は広い画面での値で、狭い画面では xTarget が余白に合わせて縮める。
- */
 export const POSES: readonly Pose[] = [
   { x: 14, tilt: -4, scale: 1.0, gaze: { x: -6, y: 1 } },
   { x: -18, tilt: 7, scale: 0.94, gaze: { x: -8, y: -3 } },
@@ -41,7 +36,6 @@ export function poseAt(block: number): Pose {
 
 const sideSign = (side: Side): number => (side === "right" ? 1 : -1);
 
-/** 左の余白では、本文 (右) の側を向くように、姿勢を左右反転する。大きさは変えない。 */
 export function mirrorPose(pose: Pose, side: Side): Pose {
   if (side === "right") return pose;
   return { x: -pose.x, tilt: -pose.tilt, scale: pose.scale, gaze: { x: -pose.gaze.x, y: pose.gaze.y } };
@@ -53,16 +47,10 @@ export interface Spring {
 }
 
 export interface SpringParams {
-  /** 固有角振動数 (rad/s) */
   omega: number;
-  /** 減衰比 */
   zeta: number;
 }
 
-/**
- * 減衰比 0.7 で行き過ぎは約 5%、固有角振動数 9 で 1 秒ほどで落ち着く。
- * 傾きと跳ねは行き過ぎを大きくして、布の揺り戻しと弾みを出す。
- */
 export const SPRINGS = {
   x: { omega: 8, zeta: 0.7 },
   y: { omega: 9, zeta: 0.7 },
@@ -71,10 +59,8 @@ export const SPRINGS = {
   hop: { omega: 18, zeta: 0.4 },
 } as const satisfies Record<string, SpringParams>;
 
-/** タブを開き直した直後などの長い 1 コマで、積分が発散して飛ばないための上限 (秒)。 */
 export const MAX_DT = 0.032;
 
-/** 半陰的オイラー。ω・dt が 2 未満なら発散しないので、MAX_DT なら ω は 60 まで使える。 */
 export function springStep(s: Spring, target: number, dt: number, p: SpringParams): Spring {
   const h = clamp(dt, 0, MAX_DT);
   const v = s.v + (p.omega * p.omega * (target - s.x) - 2 * p.zeta * p.omega * s.v) * h;
@@ -88,7 +74,6 @@ export function atRest(s: Spring, target: number): boolean {
   return Math.abs(target - s.x) < REST_POS && Math.abs(s.v) < REST_VEL;
 }
 
-/** 1000px/s のスクロールで 5 度。上限 8 度は、姿勢の傾き (最大 9 度) と足しても 17 度までで、余白に収まる範囲。 */
 export const TILT_PER_SPEED = 0.005;
 export const TILT_MAX = 8;
 
@@ -96,7 +81,6 @@ export function tiltFromVelocity(speed: number): number {
   return -clamp(speed * TILT_PER_SPEED, -TILT_MAX, TILT_MAX) || 0;
 }
 
-/** 横の速さ 1000px/s で 30 度。渡るときの速さでは上限に当たる。 */
 export const TILT_PER_VX = 0.03;
 export const TILT_X_MAX = 12;
 
@@ -109,7 +93,6 @@ export interface Span {
   bottom: number;
 }
 
-/** 目が置かれやすい、画面の中央より少し上。 */
 export const READ_LINE = 0.45;
 
 export function readLine(scrollY: number, viewportH: number): number {
@@ -174,7 +157,6 @@ export const BLINK_MIN_MS = 3000;
 export const BLINK_MAX_MS = 7000;
 export const BLINK_MS = 120;
 
-/** 種を n から作るので、順番に引いても飛ばして引いても同じ列になる。 */
 export function blinkDelay(n: number): number {
   let t = (Math.imul(n + 1, 0x9e3779b9) + 0x6d2b79f5) | 0;
   t = Math.imul(t ^ (t >>> 15), t | 1);
@@ -190,34 +172,28 @@ export const HOP_KICK = -320;
 export const FLOAT_IDLE = 1;
 export const FLOAT_MOVING = 0.15;
 
-/** 余白の端と本文の列から、ゴーストの見かけの幅の外側に必ず空ける隙間 (px)。 */
 export const EDGE_GAP = 12;
 
-/** 傾いた姿勢の外接する幅の半分。getBoundingClientRect と同じ見かけの幅で測る。 */
 export function halfExtent(pose: Pose): number {
   const t = (Math.abs(pose.tilt) * Math.PI) / 180;
   return (pose.scale * (GHOST_W * Math.cos(t) + GHOST_W * GHOST_ASPECT * Math.sin(t))) / 2;
 }
 
-/** 余白の中央から、左右どちらにずれてよいか。余白が狭いほど小さく、0 で止まる。 */
 export function xRoom(width: number, pose: Pose): number {
   return Math.max(0, marginWidth(width) / 2 - halfExtent(pose) - EDGE_GAP);
 }
 
 export const SWAY_AMP = 28;
 export const SWAY_CYCLES = 1.5;
-/** 黄金角。姿勢の番号に掛けると、隣り合う節の位相がなるべく重ならない。 */
-export const SWAY_PHASE_STEP = 2.4;
+export const GOLDEN_ANGLE_RAD = 2.4;
 
 export function swayX(progress: number, block: number): number {
-  return SWAY_AMP * Math.sin(2 * Math.PI * SWAY_CYCLES * clamp(progress, 0, 1) + poseIndex(block) * SWAY_PHASE_STEP);
+  return SWAY_AMP * Math.sin(2 * Math.PI * SWAY_CYCLES * clamp(progress, 0, 1) + poseIndex(block) * GOLDEN_ANGLE_RAD);
 }
 
-/** 余白が十分に広いときに、姿勢の x と揺れを何倍まで増やすか。 */
 export const X_GAIN_MAX = 1.5;
 const X_RAW_MAX = Math.max(...POSES.map((p) => Math.abs(p.x))) + SWAY_AMP;
 
-/** ゴーストの中心の x の目標。progress が null (一覧) なら揺れは無い。姿勢の x と揺れの和を、xRoom に収まる倍率で縮める。 */
 export function xTarget(width: number, side: Side, block: number, progress: number | null): number {
   const pose = poseAt(block);
   const raw = pose.x + (progress === null ? 0 : swayX(progress, block));
@@ -225,7 +201,6 @@ export function xTarget(width: number, side: Side, block: number, progress: numb
   return ghostX(width, side) + sideSign(side) * raw * gain;
 }
 
-/** これ以上の幅で、右と左の余白を交互に使う。将来オフにするときは、この値を Infinity にする。 */
 export const CROSS_SIDES_MIN_WIDTH = 1200;
 export const CROSS_COOLDOWN_MS = 600;
 
@@ -236,17 +211,12 @@ export function sideForBlock(block: number, width: number): Side {
 
 export interface SideState {
   side: Side;
-  /** 側が最後に変わった時刻 (ms)。一度も変わっていなければ -Infinity。 */
-  switchedAt: number;
+  switchedAtMs: number;
 }
 
-/**
- * 切り替えは前回の切り替えから CROSS_COOLDOWN_MS 以上あけてだけ許す。断られた試みは時刻を動かさないので、
- * 速いスクロールの間に溜まった差は、静まった後の最初の呼び出しで追いつく。
- */
 export function resolveSide(prev: SideState, desired: Side, now: number): SideState {
-  if (desired === prev.side || now - prev.switchedAt < CROSS_COOLDOWN_MS) return prev;
-  return { side: desired, switchedAt: now };
+  if (desired === prev.side || now - prev.switchedAtMs < CROSS_COOLDOWN_MS) return prev;
+  return { side: desired, switchedAtMs: now };
 }
 
 export function crossProgress(from: number, to: number, x: number): number {
@@ -259,5 +229,4 @@ export function arcLift(progress: number): number {
   return -CROSS_ARC_PX * Math.sin(Math.PI * clamp(progress, 0, 1));
 }
 
-/** 渡りが終わったとみなす、目標までの距離 (px)。 */
 export const CROSS_DONE_PX = 40;

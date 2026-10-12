@@ -358,17 +358,17 @@ test("側は偶数番目が右、奇数番目が左。1200px 未満は常に右"
 });
 
 test("側の切り替えは前回から 600ms 以上たった後だけで、断られても時刻は動かない", () => {
-  const first: SideState = { side: "right", switchedAt: -Infinity };
+  const first: SideState = { side: "right", switchedAtMs: -Infinity };
   const a = resolveSide(first, "left", 0);
-  assert.deepEqual(a, { side: "left", switchedAt: 0 }, "最初の切り替えはすぐ通る");
+  assert.deepEqual(a, { side: "left", switchedAtMs: 0 }, "最初の切り替えはすぐ通る");
   assert.equal(resolveSide(a, "right", CROSS_COOLDOWN_MS - 1), a, "599ms では戻れない");
-  assert.deepEqual(resolveSide(a, "right", CROSS_COOLDOWN_MS), { side: "right", switchedAt: CROSS_COOLDOWN_MS });
+  assert.deepEqual(resolveSide(a, "right", CROSS_COOLDOWN_MS), { side: "right", switchedAtMs: CROSS_COOLDOWN_MS });
   assert.equal(resolveSide(a, "left", 5), a, "同じ側なら何もしない");
   assert.equal(resolveSide(a, "left", 100000), a, "同じ側なら時刻も動かない");
 });
 
 test("速い切り替えが続いても、側の変更は 600ms あき、静まれば望む側に追いつく", () => {
-  let st: SideState = { side: "right", switchedAt: -Infinity };
+  let st: SideState = { side: "right", switchedAtMs: -Infinity };
   const switches: number[] = [];
   for (let t = 0; t <= 3000; t += 16) {
     const block = t < 2000 ? Math.floor(t / 100) : 20;
@@ -413,4 +413,10 @@ test("渡りの弧は、出発と到着で 0、中ほどで最も高く、上向
   assert.ok(Math.abs(arcLift(1)) < 1e-9);
   assert.equal(arcLift(0.5), -CROSS_ARC_PX);
   assert.ok(arcLift(0.25) > arcLift(0.5) && arcLift(0.25) < 0);
+});
+
+test("every spring stays stable at the largest time step", () => {
+  for (const [name, p] of Object.entries(SPRINGS)) {
+    assert.ok(p.omega * MAX_DT < 2, `${name} diverges when omega * MAX_DT >= 2`);
+  }
 });
