@@ -31,6 +31,17 @@ cd frontend && npm install && npm run dev
 
 backend の初回は `worker-build` の取得と WASM のビルドで時間がかかります。必要なもの: Rust（`wasm32-unknown-unknown` ターゲット）、Node.js 22。
 
+## 管理画面をローカルで動かす
+
+`/admin` は Cloudflare Access の JWT を見ます。手元では Access が無いので、`astro dev` のときだけ検査を飛ばせます。`astro build` の出力では、この迂回は効きません。
+
+```bash
+cd backend  && echo 'ADMIN_TOKEN=local-test-token' > .dev.vars && npx wrangler dev
+cd frontend && ADMIN_TOKEN=local-test-token ADMIN_DEV_BYPASS=1 PUBLIC_API_URL=http://localhost:8787 npm run dev
+```
+
+`http://localhost:4321/admin` を開きます。`ADMIN_TOKEN` は API の `.dev.vars` と同じ値にします。画像のアップロードは、ローカルの R2 と Images で動きます。
+
 ## テストとチェック
 
 ```bash
@@ -38,5 +49,7 @@ cd backend  && cargo fmt --check && cargo clippy --target wasm32-unknown-unknown
 cd frontend && npm run check && npm test && npm run build
 cd tools    && npm run typecheck && npm test
 ```
+
+`frontend` のテストは、Access の JWT 検証、管理用 API クライアント、保存の本文を作る処理、JST の変換を対象にしています。
 
 同じ内容を CI（`.github/workflows/ci.yml`）が走らせます。Rust のテストは Workers に依存しない純粋なロジック（`backend/src/util.rs`）を対象にしています。

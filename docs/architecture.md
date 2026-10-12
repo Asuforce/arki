@@ -6,10 +6,29 @@
 │   ├── migrations/
 │   └── src/lib.rs  util.rs  images.rs
 ├── frontend/   Astro（SSR）。Worker + 静的ファイルとしてデプロイ
-└── tools/      取り込み、画像移行、投稿 CLI（TypeScript）
+└── tools/      取り込み、画像移行（TypeScript）
 ```
 
 ブラウザはフロントの Worker にアクセスし、フロントが API の Worker を `fetch()` して D1 の記事を描画します。
+
+## 管理画面
+
+`/admin` はフロントの Worker にあります。ブラウザは `ADMIN_TOKEN` を持たず、フロントがサーバー側で API を呼びます。
+
+```mermaid
+flowchart LR
+  B[ブラウザ] -->|"/admin*"| A[Cloudflare Access<br/>Google ログイン]
+  A -->|Cf-Access-Jwt-Assertion| F[フロントの Worker<br/>middleware で JWT を検証]
+  F -->|"Bearer ADMIN_TOKEN"| P[API の Worker]
+  P --> D[(D1)]
+  P --> R[(R2 / Images)]
+```
+
+- 守りは 2 重です。Access が入口で止め、Worker も JWT の署名、`aud`、`iss`、期限と、`email` が `ADMIN_EMAIL` と同じことを検証します。secret が揃っていなければ閉じます。
+- `/admin` の応答は `Cache-Control: no-store` と `X-Robots-Tag: noindex` です。書き込みは同一オリジンの要求だけを通します。
+- Access の範囲は `/admin*` だけなので、Astro が自動で公開する `/_actions` と `/_server-islands` は 404 にします。
+- 管理用の API クライアントは `lib/admin-api.ts` に分けてあります。公開側の `lib/api.ts` はトークンを持たず、下書きが一覧や RSS に出ません。
+- 見た目は公開側のトークンとフォントを共有し、星とゴーストは出しません。
 
 ## データ
 
@@ -21,7 +40,7 @@
 
 ## URL と slug
 
-記事の URL は `/entry/<slug>` です。`slug` の形は `YYYY/MM/DD/HHMMSS`（JST の公開日時）で、はてなブログの記事パスと同じです。同時刻の記事には `_1` のような接尾辞が付きます。省略して投稿すると `published_at` から作られます。使える文字は英数字と `-` `_` `/` です。
+記事の URL は `/entry/<slug>` です。`slug` の形は `YYYY/MM/DD/HHMMSS`（JST の公開日時）で、はてなブログの記事パスと同じです。同時刻の記事には `_1` のような接尾辞が付きます。初回公開のときに `published_at` から作られます（[api.md](api.md#slug-と公開日時)）。使える文字は英数字と `-` `_` `/` です。
 
 | パス | 内容 |
 |---|---|
