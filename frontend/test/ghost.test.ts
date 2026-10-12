@@ -11,6 +11,7 @@ import {
   CURSOR_NEAR,
   EDGE_GAP,
   MAX_DT,
+  NEUTRAL_POSE,
   POSES,
   READ_LINE,
   SPRINGS,
@@ -19,6 +20,7 @@ import {
   TILT_MAX,
   TILT_X_MAX,
   X_GAIN_MAX,
+  aimFor,
   atRest,
   band,
   bandY,
@@ -32,6 +34,7 @@ import {
   mirrorPose,
   pickArticleBlock,
   pickListBlock,
+  pickListTarget,
   poseAt,
   readLine,
   resolveSide,
@@ -419,4 +422,48 @@ test("every spring stays stable at the largest time step", () => {
   for (const [name, p] of Object.entries(SPRINGS)) {
     assert.ok(p.omega * MAX_DT < 2, `${name} diverges when omega * MAX_DT >= 2`);
   }
+});
+
+test("動きを減らす設定の目標は、ブロックにも進み具合にも側にも依らず、中立の姿勢で右の余白の中央に立つ", () => {
+  for (const width of WIDTHS) {
+    const rest = aimFor(true, width, "right", 0, null);
+    assert.deepEqual(rest.pose, NEUTRAL_POSE);
+    assert.equal(rest.pose.tilt, 0);
+    assert.equal(rest.pose.scale, 1);
+    assert.deepEqual(rest.pose.gaze, { x: 0, y: 0 });
+    assert.equal(rest.x, ghostX(width));
+    for (const side of SIDES) {
+      for (let block = 0; block < POSES.length * 2; block++) {
+        for (const progress of [null, 0, 0.37, 1]) {
+          assert.deepEqual(aimFor(true, width, side, block, progress), rest, `${width}px ${side} ${block} ${progress}`);
+        }
+      }
+    }
+  }
+});
+
+test("動きを減らさないときの目標は、ブロックと進み具合で動く", () => {
+  const at = (block: number, progress: number | null) => aimFor(false, 1280, "right", block, progress);
+  assert.notDeepEqual(at(0, 0).pose, at(1, 0).pose, "ブロックで姿勢が変わる");
+  assert.notEqual(at(1, 0).x, at(1, 0.4).x, "進み具合で x が揺れる");
+  assert.deepEqual(at(3, 0.2).pose, mirrorPose(poseAt(3), "right"));
+  assert.deepEqual(aimFor(false, 1280, "left", 3, 0.2).pose, mirrorPose(poseAt(3), "left"));
+});
+
+test("一覧でホバーしても、側を決める読み取り線のブロックは変わらず、姿勢と高さはホバーしたカードに寄る", () => {
+  const spans = Array.from({ length: 8 }, (_, i) => ({ top: i * 200, bottom: i * 200 + 200 }));
+  for (const line of [10, 250, 620, 1100, 1599, 9999]) {
+    const read = pickListTarget(spans, line, null);
+    assert.equal(read.block, read.readBlock, "ホバーが無ければ読み取り線のブロック");
+    for (let hovered = 0; hovered < spans.length; hovered++) {
+      const t = pickListTarget(spans, line, hovered);
+      assert.equal(t.readBlock, read.readBlock, `line ${line} hovered ${hovered}`);
+      assert.equal(t.block, hovered);
+      for (const width of [1100, 1280, 1600]) {
+        assert.equal(sideForBlock(t.readBlock, width), sideForBlock(read.readBlock, width), `${width}px line ${line} hovered ${hovered}`);
+      }
+    }
+  }
+  assert.equal(pickListTarget(spans, -50, null).readBlock, 0, "先頭より上でも先頭");
+  assert.equal(pickListTarget([], 100, null).readBlock, 0, "li が無くても 0");
 });

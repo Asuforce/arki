@@ -108,6 +108,15 @@ export function pickListBlock(items: readonly Span[], line: number): number {
   return found;
 }
 
+export function pickListTarget(
+  items: readonly Span[],
+  line: number,
+  hovered: number | null,
+): { block: number; readBlock: number } {
+  const readBlock = Math.max(0, pickListBlock(items, line));
+  return { block: hovered ?? readBlock, readBlock };
+}
+
 export function pickArticleBlock(tops: readonly number[], line: number): number {
   return pickListBlock(
     tops.map((top) => ({ top, bottom: top })),
@@ -199,6 +208,18 @@ export function xTarget(width: number, side: Side, block: number, progress: numb
   const raw = pose.x + (progress === null ? 0 : swayX(progress, block));
   const gain = Math.min(X_GAIN_MAX, xRoom(width, pose) / X_RAW_MAX);
   return ghostX(width, side) + sideSign(side) * raw * gain;
+}
+
+export const NEUTRAL_POSE: Pose = { x: 0, tilt: 0, scale: 1, gaze: { x: 0, y: 0 } };
+
+export interface Aim {
+  x: number;
+  pose: Pose;
+}
+
+export function aimFor(reduced: boolean, width: number, side: Side, block: number, progress: number | null): Aim {
+  if (reduced) return { x: ghostX(width), pose: NEUTRAL_POSE };
+  return { x: xTarget(width, side, block, progress), pose: mirrorPose(poseAt(block), side) };
 }
 
 export const CROSS_SIDES_MIN_WIDTH = 1200;

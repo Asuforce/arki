@@ -7,7 +7,9 @@ import {
   HOP_SINK_MS,
   HOP_SINK_PX,
   MAX_DT,
+  NEUTRAL_POSE,
   SPRINGS,
+  aimFor,
   arcLift,
   atRest,
   bandY,
@@ -15,10 +17,8 @@ import {
   crossProgress,
   gaze,
   listY,
-  mirrorPose,
   pickArticleBlock,
-  pickListBlock,
-  poseAt,
+  pickListTarget,
   readLine,
   resolveSide,
   sectionProgress,
@@ -26,12 +26,12 @@ import {
   springStep,
   tiltFromHorizontalVelocity,
   tiltFromVelocity,
-  xTarget,
+  type Pose,
   type SideState,
   type Span,
   type Spring,
 } from "../lib/ghost";
-import { GHOST_W, WIDE_MIN, ghostX } from "../lib/world";
+import { GHOST_W, WIDE_MIN } from "../lib/world";
 
 const PUPIL_REACH = 8;
 const SCROLL_SMOOTH_PER_S = 10;
@@ -41,6 +41,13 @@ type Layout =
   | { kind: "list"; spans: Span[]; titleMids: number[] }
   | { kind: "article"; tops: number[]; spans: Span[] }
   | { kind: "none" };
+
+interface Target {
+  block: number;
+  readBlock: number;
+  y: number;
+  progress: number | null;
+}
 
 const docTop = (el: Element): number => el.getBoundingClientRect().top + window.scrollY;
 
@@ -111,6 +118,7 @@ export function initGhost(): void {
   let crossFrom = 0;
   let lastWidth = 0;
   let block = -1;
+  let pose: Pose = NEUTRAL_POSE;
   let running = false;
   let lastTime = 0;
   let lastScroll = window.scrollY;
@@ -120,36 +128,35 @@ export function initGhost(): void {
 
   const width = (): number => document.documentElement.clientWidth;
 
-  const target = (ghostH: number): { block: number; y: number; progress: number | null } => {
+  const target = (ghostH: number): Target => {
     const vh = window.innerHeight;
+    if (reduced.matches) return { block: 0, readBlock: 0, y: bandY(0, vh, ghostH), progress: null };
     const line = readLine(window.scrollY, vh);
     const scrollable = document.documentElement.scrollHeight > vh;
     if (layout.kind === "list") {
-      const i = hovered ?? Math.max(0, pickListBlock(layout.spans, line));
-      return { block: i, y: listY(layout.titleMids[i] - window.scrollY, vh, ghostH), progress: null };
+      const { block: i, readBlock } = pickListTarget(layout.spans, line, hovered);
+      return { block: i, readBlock, y: listY(layout.titleMids[i] - window.scrollY, vh, ghostH), progress: null };
     }
     if (layout.kind === "article") {
       const i = Math.max(0, pickArticleBlock(layout.tops, line));
       const progress = scrollable ? sectionProgress(layout.spans[i], line) : 0;
-      return { block: i, y: bandY(progress, vh, ghostH), progress };
+      return { block: i, readBlock: i, y: bandY(progress, vh, ghostH), progress };
     }
-    return { block: 0, y: bandY(0, vh, ghostH), progress: null };
+    return { block: 0, readBlock: 0, y: bandY(0, vh, ghostH), progress: null };
   };
 
   const render = (): void => {
     const h = ghost.offsetHeight;
-    const moving = reduced.matches ? 0 : 1;
     ghost.style.transform =
-      `translate(${xs.x - GHOST_W / 2}px, ${y.x + hop.x * moving}px) rotate(${tilt.x}deg) scale(${scale.x})`;
+      `translate(${xs.x - GHOST_W / 2}px, ${y.x + hop.x}px) rotate(${tilt.x}deg) scale(${scale.x})`;
     ghost.dataset.side = sideState.side;
     ghost.toggleAttribute("data-crossing", crossing);
 
-    const pose = mirrorPose(poseAt(block), sideState.side);
     const cursor =
       pointer && finePointer.matches && !reduced.matches
         ? { dx: pointer.x - xs.x, dy: pointer.y - (y.x + h / 2) }
         : null;
-    const eyes = reduced.matches ? { x: 0, y: 0 } : gaze(pose.gaze, cursor, PUPIL_REACH);
+    const eyes = gaze(pose.gaze, cursor, PUPIL_REACH);
     ghost.style.setProperty("--gx", eyes.x.toFixed(2));
     ghost.style.setProperty("--gy", eyes.y.toFixed(2));
   };
@@ -160,19 +167,17 @@ export function initGhost(): void {
     blinkNow();
   };
 
-  const snapX = (t: { block: number; progress: number | null }): void => {
-    const w = width();
-    lastWidth = w;
-    sideState = { side: sideForBlock(t.block, w), switchedAtMs: sideState.switchedAtMs };
-    crossing = false;
-    xs.x = xTarget(w, sideState.side, t.block, t.progress);
-    xs.v = 0;
-  };
-
   const settle = (): void => {
     const t = target(ghost.offsetHeight);
-    snapX(t);
-    const pose = mirrorPose(poseAt(t.block), sideState.side);
+    const w = width();
+    lastWidth = w;
+    block = t.block;
+    sideState = { side: sideForBlock(t.readBlock, w), switchedAtMs: sideState.switchedAtMs };
+    crossing = false;
+    const aim = aimFor(reduced.matches, w, sideState.side, t.block, t.progress);
+    pose = aim.pose;
+    xs.x = aim.x;
+    xs.v = 0;
     y.x = t.y;
     tilt.x = pose.tilt;
     scale.x = pose.scale;
@@ -196,14 +201,16 @@ export function initGhost(): void {
       react(now);
     }
     const w = width();
-    const resolved = resolveSide(sideState, sideForBlock(block, w), now);
+    const desiredSide = sideForBlock(t.readBlock, w);
+    const resolved = resolveSide(sideState, desiredSide, now);
     if (resolved !== sideState) {
       sideState = resolved;
       crossing = true;
       crossFrom = xs.x;
     }
-    const pose = mirrorPose(poseAt(block), sideState.side);
-    const tx = xTarget(w, sideState.side, block, t.progress);
+    const aim = aimFor(reduced.matches, w, sideState.side, block, t.progress);
+    pose = aim.pose;
+    const tx = aim.x;
     if (crossing && Math.abs(tx - xs.x) <= CROSS_DONE_PX) crossing = false;
 
     let hopTarget = crossing ? arcLift(crossProgress(crossFrom, tx, xs.x)) : 0;
@@ -227,7 +234,7 @@ export function initGhost(): void {
     const still =
       atRest(xs, tx) &&
       !crossing &&
-      sideState.side === sideForBlock(block, w) &&
+      sideState.side === desiredSide &&
       atRest(y, t.y) &&
       atRest(tilt, pose.tilt) &&
       atRest(scale, pose.scale) &&
@@ -247,12 +254,7 @@ export function initGhost(): void {
   };
 
   const wake = (): void => {
-    if (!wide.matches) return;
-    if (reduced.matches) {
-      instant();
-      return;
-    }
-    if (running) return;
+    if (!wide.matches || reduced.matches || running) return;
     running = true;
     lastScroll = window.scrollY;
     scrollVel = 0;
@@ -260,34 +262,16 @@ export function initGhost(): void {
     requestAnimationFrame(frame);
   };
 
-  const instant = (): void => {
-    const t = target(ghost.offsetHeight);
-    block = t.block;
-    lastWidth = width();
-    sideState = { side: "right", switchedAtMs: -Infinity };
-    crossing = false;
-    xs.x = ghostX(lastWidth);
-    xs.v = 0;
-    y.x = t.y;
-    tilt.x = 0;
-    scale.x = 1;
-    hop.x = 0;
-    ghost.style.setProperty("--float", "0");
-    render();
-  };
-
   const place = (): void => {
     layout = measure();
     if (!wide.matches) return;
-    if (!ghost.hasAttribute("data-ready")) {
-      block = target(ghost.offsetHeight).block;
+    if (reduced.matches || !ghost.hasAttribute("data-ready")) {
       settle();
-      if (reduced.matches) instant();
       render();
       ghost.setAttribute("data-ready", "");
       return;
     }
-    if (width() !== lastWidth) snapX(target(ghost.offsetHeight));
+    if (width() !== lastWidth) settle();
     wake();
   };
 

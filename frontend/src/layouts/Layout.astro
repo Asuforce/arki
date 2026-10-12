@@ -28,11 +28,10 @@ const pageTitle = title ? `${title} | ${siteTitle}` : siteTitle;
     <meta name="theme-color" content="#000000" />
     <script is:inline>
       (function () {
-        var theme = "dark";
+        var theme = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
         try {
           var saved = localStorage.getItem("theme");
           if (saved === "light" || saved === "dark") theme = saved;
-          else if (window.matchMedia("(prefers-color-scheme: light)").matches) theme = "light";
         } catch (e) {}
         document.documentElement.setAttribute("data-theme", theme);
         document.querySelector('meta[name="theme-color"]').setAttribute("content", theme === "light" ? "#f5f4f0" : "#000000");
