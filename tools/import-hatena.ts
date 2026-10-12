@@ -78,7 +78,7 @@ function main(): void {
     const categories: string[] = Array.isArray(data.Category) ? data.Category.map(String) : [];
 
     statements.push(
-      `INSERT INTO posts (slug, title, content, excerpt, status, published_at, legacy_url) VALUES (` +
+      `INSERT INTO posts (slug, title, content, excerpt, status, published_at, legacy_url, slug_fixed, date_fixed) VALUES (` +
         [
           sqlString(slug),
           sqlString(String(data.Title)),
@@ -87,6 +87,8 @@ function main(): void {
           sqlString(status),
           sqlString(toUtcIso(date)),
           data.URL ? sqlString(String(data.URL)) : "NULL",
+          "1",
+          "1",
         ].join(", ") +
         `);`,
     );

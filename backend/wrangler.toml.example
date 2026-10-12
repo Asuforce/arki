@@ -11,7 +11,15 @@ database_name = "arki-db"
 database_id = "<YOUR_D1_DATABASE_ID>"
 migrations_dir = "migrations"
 
+[[r2_buckets]]
+binding = "IMAGES_BUCKET"
+bucket_name = "arki-images"
+
+[images]
+binding = "IMAGES"
+
 [vars]
 CORS_ALLOW_ORIGIN = "https://<your-blog-domain>"
+IMAGE_BASE_URL = "https://<your-image-domain>"
 
 # Secret (not in this file): npx wrangler secret put ADMIN_TOKEN

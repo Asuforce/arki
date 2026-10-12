@@ -44,10 +44,12 @@ jobs:
         env:
           D1_DATABASE_ID: ${{ vars.ARKI_D1_DATABASE_ID }}
           BLOG_ORIGIN: ${{ vars.ARKI_BLOG_ORIGIN }}
+          IMAGE_BASE_URL: ${{ vars.ARKI_IMAGE_BASE_URL }}
         run: |
-          test -n "$D1_DATABASE_ID" && test -n "$BLOG_ORIGIN"
+          test -n "$D1_DATABASE_ID" && test -n "$BLOG_ORIGIN" && test -n "$IMAGE_BASE_URL"
           sed -e "s|<YOUR_D1_DATABASE_ID>|$D1_DATABASE_ID|" \
               -e "s|https://<your-blog-domain>|$BLOG_ORIGIN|" \
+              -e "s|https://<your-image-domain>|$IMAGE_BASE_URL|" \
               wrangler.toml.example > wrangler.toml
       - run: npx wrangler d1 migrations apply DB --remote
       - run: npx wrangler deploy

@@ -3,8 +3,8 @@
 ```
 .
 ├── backend/    Workers の API（Rust / workers-rs）
-│   ├── migrations/0001_init.sql
-│   └── src/lib.rs  util.rs
+│   ├── migrations/
+│   └── src/lib.rs  util.rs  images.rs
 ├── frontend/   Astro（SSR）。Worker + 静的ファイルとしてデプロイ
 └── tools/      取り込み、画像移行、投稿 CLI（TypeScript）
 ```
@@ -13,9 +13,9 @@
 
 ## データ
 
-`backend/migrations/0001_init.sql` が正です。
+`backend/migrations/` が正です。
 
-- `posts`: `slug`（一意）、`title`、`content`（Markdown）、`excerpt`、`status`（`draft` / `published`）、`published_at`、`created_at`、`updated_at`、`legacy_url`
+- `posts`: `slug`（一意）、`title`、`content`（Markdown）、`excerpt`、`status`（`draft` / `published`）、`published_at`、`created_at`、`updated_at`、`legacy_url`、`slug_fixed` と `date_fixed`（`0` の間は仮の値で、初回公開で確定する。[api.md](api.md#slug-と公開日時)）
 - `categories`、`post_categories`: カテゴリと、記事との多対多
 - 時刻はすべて UTC の ISO 8601（`2019-11-22T18:13:44Z`）で持ちます。文字列のまま並べ替えられます。表示のときだけ JST にします。
 
