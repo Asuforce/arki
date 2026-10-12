@@ -6,8 +6,8 @@ const categories = await listCategories();
 Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
 ---
 
-<Layout title="カテゴリ">
-  <h1>カテゴリ</h1>
+<Layout title="Category">
+  <h1>Category</h1>
   <ul class="category-list">
     {
       categories.map((c) => (

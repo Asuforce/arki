@@ -13,10 +13,10 @@ const lastPage = Math.max(1, Math.ceil(total / limit));
 
 {
   lastPage > 1 && (
-    <nav class="pagination" aria-label="ページ送り">
-      {page > 1 ? <a rel="prev" href={pageHref(page - 1, basePath)}>← 新しい記事</a> : <span />}
+    <nav class="pagination" lang="en" aria-label="Pagination">
+      {page > 1 ? <a rel="prev" href={pageHref(page - 1, basePath)}>← Newer</a> : <span />}
       <span class="current">{page} / {lastPage}</span>
-      {page < lastPage ? <a rel="next" href={pageHref(page + 1, basePath)}>古い記事 →</a> : <span />}
+      {page < lastPage ? <a rel="next" href={pageHref(page + 1, basePath)}>Older →</a> : <span />}
     </nav>
   )
 }

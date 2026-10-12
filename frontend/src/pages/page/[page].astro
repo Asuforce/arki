@@ -13,7 +13,7 @@ if (posts.length === 0) return new Response("Not Found", { status: 404 });
 Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
 ---
 
-<Layout title={`${page} ページ目`}>
+<Layout title={`Page ${page}`}>
   <PostList posts={posts} />
   <Pagination page={page} limit={limit} total={total} basePath="/" />
 </Layout>
