@@ -318,23 +318,69 @@ pub fn sniff_image(bytes: &[u8]) -> Option<ImageKind> {
     }
 }
 
-/// アニメーションを持つ PNG（APNG）か WebP か。静止画への変換で動きが消えるので、そのまま保存する側が使う。
+/// アニメーションを持つ画像か。静止画への変換で動きが消えるので、持つ画像は変換せずそのまま置く。
+/// GIF は 2 フレーム以上、PNG は最初の IDAT より前に acTL、WebP は VP8X のアニメーションフラグ。
+/// 読み取れない GIF は、安全側に倒して持つ扱いにする。
 pub fn is_animated(bytes: &[u8], kind: ImageKind) -> bool {
     match kind {
-        ImageKind::Gif => true,
-        ImageKind::Png => {
-            // acTL は最初の IDAT より前に置かれる
-            let idat = find(bytes, b"IDAT").unwrap_or(bytes.len());
-            find(&bytes[..idat], b"acTL").is_some()
-        }
-        // VP8X チャンクのフラグの 0x02 がアニメーション
+        ImageKind::Gif => gif_frames(bytes).is_none_or(|n| n > 1),
+        ImageKind::Png => png_has_actl(bytes),
         ImageKind::Webp => bytes.len() > 20 && &bytes[12..16] == b"VP8X" && bytes[20] & 0x02 != 0,
         ImageKind::Jpeg => false,
     }
 }
 
-fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    haystack.windows(needle.len()).position(|w| w == needle)
+fn png_has_actl(bytes: &[u8]) -> bool {
+    let mut at = 8;
+    while let Some(header) = bytes.get(at..at + 8) {
+        let len = u32::from_be_bytes([header[0], header[1], header[2], header[3]]) as usize;
+        match &header[4..8] {
+            b"acTL" => return true,
+            b"IDAT" => return false,
+            _ => at += 12 + len,
+        }
+    }
+    false
+}
+
+/// GIF のブロックをたどってフレーム（画像記述子）の数を数える。壊れていれば `None`。
+fn gif_frames(bytes: &[u8]) -> Option<usize> {
+    let flags = *bytes.get(10)?;
+    let mut at = 13
+        + if flags & 0x80 != 0 {
+            3 << ((flags & 7) + 1)
+        } else {
+            0
+        };
+    let mut frames = 0;
+    loop {
+        match *bytes.get(at)? {
+            0x3B => return Some(frames),
+            0x21 => at = skip_sub_blocks(bytes, at + 2)?,
+            0x2C => {
+                let local = *bytes.get(at + 9)?;
+                at += 10
+                    + if local & 0x80 != 0 {
+                        3 << ((local & 7) + 1)
+                    } else {
+                        0
+                    };
+                at = skip_sub_blocks(bytes, at + 1)?;
+                frames += 1;
+            }
+            _ => return None,
+        }
+    }
+}
+
+fn skip_sub_blocks(bytes: &[u8], mut at: usize) -> Option<usize> {
+    loop {
+        let len = *bytes.get(at)? as usize;
+        at += 1 + len;
+        if len == 0 {
+            return Some(at);
+        }
+    }
 }
 
 /// 変換後の `Content-Type` に合う拡張子。
@@ -660,22 +706,66 @@ mod tests {
         assert_eq!(sniff_image(b""), None);
     }
 
+    const GIF_HEADER: &[u8] = b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff";
+    const GIF_FRAME: &[u8] =
+        b"!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00";
+
+    fn gif(frames: usize) -> Vec<u8> {
+        let mut bytes = GIF_HEADER.to_vec();
+        for _ in 0..frames {
+            bytes.extend(GIF_FRAME);
+        }
+        bytes.push(b';');
+        bytes
+    }
+
     #[test]
-    fn animation_is_detected_per_format() {
-        assert!(is_animated(b"GIF89a", ImageKind::Gif));
+    fn gif_is_animated_only_with_several_frames() {
+        assert!(!is_animated(&gif(1), ImageKind::Gif));
+        assert!(is_animated(&gif(2), ImageKind::Gif));
+        assert!(
+            is_animated(&gif(1)[..20], ImageKind::Gif),
+            "truncated counts as animated"
+        );
+    }
+
+    const PNG_SIGNATURE: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+
+    fn chunk(kind: &[u8], data: &[u8]) -> Vec<u8> {
+        let mut bytes = (data.len() as u32).to_be_bytes().to_vec();
+        bytes.extend(kind);
+        bytes.extend(data);
+        bytes.extend([0; 4]);
+        bytes
+    }
+
+    #[test]
+    fn png_animation_is_read_from_chunks_not_bytes() {
         let apng = [
-            &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A][..],
-            b"....acTL....IDAT",
+            PNG_SIGNATURE,
+            &chunk(b"acTL", &[0; 8]),
+            &chunk(b"IDAT", &[]),
         ]
         .concat();
         assert!(is_animated(&apng, ImageKind::Png));
-        let png = [
-            &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A][..],
-            b"....IDAT....acTL",
+        let still = [
+            PNG_SIGNATURE,
+            &chunk(b"IDAT", &[]),
+            &chunk(b"acTL", &[0; 8]),
         ]
         .concat();
-        assert!(!is_animated(&png, ImageKind::Png));
+        assert!(!is_animated(&still, ImageKind::Png));
+        let lookalike = [
+            PNG_SIGNATURE,
+            &chunk(b"iCCP", b"acTL"),
+            &chunk(b"IDAT", &[]),
+        ]
+        .concat();
+        assert!(!is_animated(&lookalike, ImageKind::Png));
+    }
 
+    #[test]
+    fn webp_and_jpeg_animation() {
         let mut webp = b"RIFF\0\0\0\0WEBPVP8X\x0a\0\0\0".to_vec();
         webp.extend([0x02, 0, 0, 0]);
         assert!(is_animated(&webp, ImageKind::Webp));

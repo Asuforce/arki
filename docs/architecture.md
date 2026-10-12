@@ -15,7 +15,7 @@
 
 `backend/migrations/` が正です。
 
-- `posts`: `slug`（一意）、`title`、`content`（Markdown）、`excerpt`、`status`（`draft` / `published`）、`published_at`、`created_at`、`updated_at`、`legacy_url`、`slug_fixed`（`1` なら slug を変えない。`0` の下書きは初回公開で作り直す。[api.md](api.md#slug-と公開日時)）
+- `posts`: `slug`（一意）、`title`、`content`（Markdown）、`excerpt`、`status`（`draft` / `published`）、`published_at`、`created_at`、`updated_at`、`legacy_url`、`slug_fixed` と `date_fixed`（`0` の間は仮の値で、初回公開で確定する。[api.md](api.md#slug-と公開日時)）
 - `categories`、`post_categories`: カテゴリと、記事との多対多
 - 時刻はすべて UTC の ISO 8601（`2019-11-22T18:13:44Z`）で持ちます。文字列のまま並べ替えられます。表示のときだけ JST にします。
 
