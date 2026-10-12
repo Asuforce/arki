@@ -22,7 +22,8 @@ import {
   readLine,
   resolveSide,
   sectionProgress,
-  sideForBlock,
+  sideForGroup,
+  sideGroups,
   springStep,
   tiltFromHorizontalVelocity,
   tiltFromVelocity,
@@ -39,12 +40,12 @@ const SCROLL_REST = 5;
 
 type Layout =
   | { kind: "list"; spans: Span[]; titleMids: number[] }
-  | { kind: "article"; tops: number[]; spans: Span[] }
+  | { kind: "article"; tops: number[]; spans: Span[]; sideGroup: number[] }
   | { kind: "none" };
 
 interface Target {
   block: number;
-  readBlock: number;
+  group: number;
   y: number;
   progress: number | null;
 }
@@ -68,7 +69,8 @@ function measure(): Layout {
     const tops = heads.map(docTop);
     const end = docTop(post) + post.offsetHeight;
     const spans = tops.map((top, i) => ({ top, bottom: tops[i + 1] ?? end }));
-    return { kind: "article", tops, spans };
+    const sideGroup = sideGroups(heads.map((h) => h.tagName === "H2"));
+    return { kind: "article", tops, spans, sideGroup };
   }
   return { kind: "none" };
 }
@@ -138,19 +140,19 @@ export function initGhost(): void {
 
   const target = (ghostH: number): Target => {
     const vh = window.innerHeight;
-    if (reduced.matches) return { block: 0, readBlock: 0, y: bandY(0, vh, ghostH), progress: null };
+    if (reduced.matches) return { block: 0, group: 0, y: bandY(0, vh, ghostH), progress: null };
     const line = readLine(window.scrollY, vh);
     const scrollable = document.documentElement.scrollHeight > vh;
     if (layout.kind === "list") {
-      const { block: i, readBlock } = pickListTarget(layout.spans, line, hovered);
-      return { block: i, readBlock, y: listY(layout.titleMids[i] - window.scrollY, vh, ghostH), progress: null };
+      const i = pickListTarget(layout.spans, line, hovered);
+      return { block: i, group: 0, y: listY(layout.titleMids[i] - window.scrollY, vh, ghostH), progress: null };
     }
     if (layout.kind === "article") {
       const i = Math.max(0, pickArticleBlock(layout.tops, line));
       const progress = scrollable ? sectionProgress(layout.spans[i], line) : 0;
-      return { block: i, readBlock: i, y: bandY(progress, vh, ghostH), progress };
+      return { block: i, group: layout.sideGroup[i], y: bandY(progress, vh, ghostH), progress };
     }
-    return { block: 0, readBlock: 0, y: bandY(0, vh, ghostH), progress: null };
+    return { block: 0, group: 0, y: bandY(0, vh, ghostH), progress: null };
   };
 
   const render = (): void => {
@@ -180,7 +182,7 @@ export function initGhost(): void {
     const w = width();
     lastWidth = w;
     block = t.block;
-    sideState = { side: sideForBlock(t.readBlock, w), switchedAtMs: sideState.switchedAtMs };
+    sideState = { side: sideForGroup(t.group, w), switchedAtMs: sideState.switchedAtMs };
     crossing = false;
     const aim = aimFor(reduced.matches, w, sideState.side, t.block, t.progress);
     pose = aim.pose;
@@ -209,7 +211,7 @@ export function initGhost(): void {
       react(now);
     }
     const w = width();
-    const desiredSide = sideForBlock(t.readBlock, w);
+    const desiredSide = sideForGroup(t.group, w);
     const resolved = resolveSide(sideState, desiredSide, now);
     if (resolved !== sideState) {
       sideState = resolved;

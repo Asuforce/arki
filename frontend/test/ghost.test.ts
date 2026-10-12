@@ -37,7 +37,8 @@ import {
   readLine,
   resolveSide,
   sectionProgress,
-  sideForBlock,
+  sideForGroup,
+  sideGroups,
   springStep,
   swayX,
   tiltFromHorizontalVelocity,
@@ -358,18 +359,27 @@ test("左の目標は右の鏡で、中立位置は余白の中央どうしの�
   }
 });
 
-test("側は広い画面では偶数番目が右、奇数番目が左。幅 1100px 以下では常に右で、広がる方向にだけ渡る", () => {
-  for (let b = 0; b < 10; b++) {
-    for (const width of [1280, 1600, 1920]) assert.equal(sideForBlock(b, width), b % 2 === 0 ? "right" : "left");
-    for (const width of [985, 1000, 1100]) assert.equal(sideForBlock(b, width), "right");
+test("側は h2 を通った個数の偶奇で決まり、幅 1100px 以下では常に右で、広がる方向にだけ渡る", () => {
+  for (let n = 0; n < 10; n++) {
+    for (const width of [1280, 1600, 1920]) assert.equal(sideForGroup(n, width), n % 2 === 0 ? "right" : "left");
+    for (const width of [985, 1000, 1100]) assert.equal(sideForGroup(n, width), "right");
   }
   let crossesFrom = Infinity;
   for (let width = 985; width <= 2000; width++) {
-    const crosses = sideForBlock(1, width) === "left";
+    const crosses = sideForGroup(1, width) === "left";
     if (crosses && crossesFrom === Infinity) crossesFrom = width;
     assert.equal(crosses, width >= crossesFrom, `${width}px で渡る/渡らないが戻っていない`);
   }
   assert.ok(crossesFrom > 1100 && crossesFrom <= 1280, `渡り始める幅 ${crossesFrom}`);
+});
+
+test("h1 と h3 の境目では側が変わらず、h2 を 1 つ通ると変わり、2 つ通ると戻る", () => {
+  const side = (heads: string[], at: number) => sideForGroup(sideGroups(heads.map((h) => h === "h2"))[at], 1280);
+  const heads = ["h1", "h3", "h3", "h3", "h2", "h3", "h3", "h2", "h3"];
+  const sides = heads.map((_, i) => side(heads, i));
+  assert.deepEqual(sides, ["right", "right", "right", "right", "left", "left", "left", "right", "right"]);
+  assert.deepEqual(sideGroups([]), []);
+  assert.deepEqual(sideGroups([false, false, false]), [0, 0, 0], "h2 の無い記事や一覧は常に 0 で渡らない");
 });
 
 test("側の切り替えは前回から 600ms 以上たった後だけで、断られても時刻は動かない", () => {
@@ -386,14 +396,14 @@ test("速い切り替えが続いても、側の変更は 600ms あき、静ま�
   let st: SideState = { side: "right", switchedAtMs: -Infinity };
   const switches: number[] = [];
   for (let t = 0; t <= 3000; t += 16) {
-    const block = t < 2000 ? Math.floor(t / 100) : 20;
-    const next = resolveSide(st, sideForBlock(block, 1280), t);
+    const group = t < 2000 ? Math.floor(t / 100) : 20;
+    const next = resolveSide(st, sideForGroup(group, 1280), t);
     if (next.side !== st.side) switches.push(t);
     st = next;
   }
   assert.ok(switches.length >= 3);
   for (let i = 1; i < switches.length; i++) assert.ok(switches[i] - switches[i - 1] >= CROSS_COOLDOWN_MS);
-  assert.equal(st.side, sideForBlock(20, 1280), "止まれば、ブロックの偶奇の側に落ち着く");
+  assert.equal(st.side, "right", "止まれば、h2 の個数の偶奇の側に落ち着く");
 });
 
 test("左の姿勢は右の鏡: 視線 x、傾き、横ずれの符号が反転し、大きさと視線 y は同じ", () => {
@@ -462,20 +472,12 @@ test("動きを減らさないときの目標は、ブロックと進み具合�
   assert.deepEqual(aimFor(false, 1280, "left", 3, 0.2).pose, mirrorPose(poseAt(3), "left"));
 });
 
-test("一覧でホバーしても、側を決める読み取り線のブロックは変わらず、姿勢と高さはホバーしたカードに寄る", () => {
+test("一覧でホバーすると、姿勢と高さはホバーしたカードに寄り、無ければ読み取り線のカード", () => {
   const spans = Array.from({ length: 8 }, (_, i) => ({ top: i * 200, bottom: i * 200 + 200 }));
   for (const line of [10, 250, 620, 1100, 1599, 9999]) {
-    const read = pickListTarget(spans, line, null);
-    assert.equal(read.block, read.readBlock, "ホバーが無ければ読み取り線のブロック");
-    for (let hovered = 0; hovered < spans.length; hovered++) {
-      const t = pickListTarget(spans, line, hovered);
-      assert.equal(t.readBlock, read.readBlock, `line ${line} hovered ${hovered}`);
-      assert.equal(t.block, hovered);
-      for (const width of [1100, 1280, 1600]) {
-        assert.equal(sideForBlock(t.readBlock, width), sideForBlock(read.readBlock, width), `${width}px line ${line} hovered ${hovered}`);
-      }
-    }
+    assert.equal(pickListTarget(spans, line, null), pickListBlock(spans, line));
+    for (let hovered = 0; hovered < spans.length; hovered++) assert.equal(pickListTarget(spans, line, hovered), hovered);
   }
-  assert.equal(pickListTarget(spans, -50, null).readBlock, 0, "先頭より上でも先頭");
-  assert.equal(pickListTarget([], 100, null).readBlock, 0, "li が無くても 0");
+  assert.equal(pickListTarget(spans, -50, null), 0, "先頭より上でも先頭");
+  assert.equal(pickListTarget([], 100, null), 0, "li が無くても 0");
 });

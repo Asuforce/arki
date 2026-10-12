@@ -108,13 +108,8 @@ export function pickListBlock(items: readonly Span[], line: number): number {
   return found;
 }
 
-export function pickListTarget(
-  items: readonly Span[],
-  line: number,
-  hovered: number | null,
-): { block: number; readBlock: number } {
-  const readBlock = Math.max(0, pickListBlock(items, line));
-  return { block: hovered ?? readBlock, readBlock };
+export function pickListTarget(items: readonly Span[], line: number, hovered: number | null): number {
+  return hovered ?? Math.max(0, pickListBlock(items, line));
 }
 
 export function pickArticleBlock(tops: readonly number[], line: number): number {
@@ -225,9 +220,14 @@ export function aimFor(reduced: boolean, width: number, side: Side, block: numbe
 export const CROSS_SIDES_MIN_WIDTH = 1200;
 export const CROSS_COOLDOWN_MS = 600;
 
-export function sideForBlock(block: number, width: number): Side {
+export function sideGroups(isH2: readonly boolean[]): number[] {
+  let seen = 0;
+  return isH2.map((h2) => (h2 ? ++seen : seen));
+}
+
+export function sideForGroup(group: number, width: number): Side {
   if (width < CROSS_SIDES_MIN_WIDTH) return "right";
-  return Math.trunc(block) % 2 === 0 ? "right" : "left";
+  return Math.trunc(group) % 2 === 0 ? "right" : "left";
 }
 
 export interface SideState {
