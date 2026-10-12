@@ -1,0 +1,13 @@
+---
+import AdminEditor from "../../components/AdminEditor.astro";
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import { loadAdminApi } from "../../lib/admin-config";
+
+const api = loadAdminApi();
+if (!api) return new Response("ADMIN_TOKEN is not set", { status: 503 });
+const suggestions = await api.categoryNames();
+---
+
+<AdminLayout title="新規作成">
+  <AdminEditor post={null} suggestions={suggestions} />
+</AdminLayout>

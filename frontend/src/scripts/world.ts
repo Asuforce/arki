@@ -11,7 +11,7 @@ function rememberTheme(theme: Theme): void {
   }
 }
 
-function initTheme(): void {
+export function initTheme(): void {
   const root = document.documentElement;
   const toggle = document.getElementById("theme-toggle");
   const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
