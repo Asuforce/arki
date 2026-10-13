@@ -26,7 +26,7 @@ test("公開側のコードは管理用のトークンに触れない（送る�
   const root = new URL("../src/", import.meta.url).pathname;
   const publicFiles = [...walk(root)].filter((f) => {
     const rel = f.slice(root.length);
-    return !rel.startsWith("pages/admin/") && !/(^|\/)admin[-A-Z]|Admin[A-Z]|editor|middleware|access/i.test(rel);
+    return !rel.startsWith("pages/admin/") && !/(^|\/)admin[-A-Z]|Admin[A-Z]|editor|middleware|(^|\/)access\.ts$/i.test(rel);
   });
   assert.ok(publicFiles.some((f) => f.endsWith("lib/api.ts")), "公開側の api.ts を検査している");
   for (const file of publicFiles) {
