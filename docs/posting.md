@@ -4,7 +4,7 @@
 
 ## 入り方
 
-`https://<ブログの URL>/admin` を開くと、Cloudflare Access の Google ログインが出ます。許可したメールアドレスだけが入れます。設定は [deploy.md](deploy.md#管理画面の設定) にあります。
+`https://<ブログの URL>/admin` を開くと、Cloudflare Access の Google ログインが出ます。許可したメールアドレスだけが入れます。ログイン済みの端末では、公開ページのヘッダーに「Admin」のリンクが出ます。設定は [deploy.md](deploy.md#管理画面の設定) にあります。
 
 ## 画面
 

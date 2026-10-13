@@ -34,6 +34,16 @@ const fetchKeys: KeyLoader = async (teamDomain, refresh = false) => {
   }
 };
 
+/** `/admin*` の外のページには `Cf-Access-Jwt-Assertion` が付かないので、Access が発行するクッキーから JWT を取る。別のアプリのクッキーが同名で並ぶことがあるので、全部返す。 */
+export function accessCookies(header: string | null): string[] {
+  const values: string[] = [];
+  for (const part of (header ?? "").split(";")) {
+    const [name, ...value] = part.trim().split("=");
+    if (name === "CF_Authorization" && value.length) values.push(value.join("="));
+  }
+  return values.filter(Boolean);
+}
+
 function b64urlToBytes(s: string): Uint8Array<ArrayBuffer> {
   const bin = atob(s.replace(/-/g, "+").replace(/_/g, "/"));
   return Uint8Array.from(bin, (c) => c.charCodeAt(0));
@@ -76,4 +86,18 @@ export async function verifyAccessJwt(
     if (error instanceof AccessUnavailableError) throw error;
     return null;
   }
+}
+
+/** どれか 1 つのクッキーが検証を通ればそのメールを返す。 */
+export async function verifyAccessCookie(
+  header: string | null,
+  config: AccessConfig,
+  loadKeys: KeyLoader = fetchKeys,
+  now: number = Date.now(),
+): Promise<string | null> {
+  for (const jwt of accessCookies(header)) {
+    const email = await verifyAccessJwt(jwt, config, loadKeys, now);
+    if (email) return email;
+  }
+  return null;
 }

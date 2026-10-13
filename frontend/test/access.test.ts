@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AccessUnavailableError, verifyAccessJwt } from "../src/lib/access.ts";
+import { AccessUnavailableError, accessCookies, verifyAccessCookie, verifyAccessJwt } from "../src/lib/access.ts";
 
 const config = { teamDomain: "team.example.com", aud: "aud-1", email: "me@example.com" };
 const b64url = (data: ArrayBuffer | string): string =>
@@ -86,4 +86,21 @@ test("鍵を取れないときは 401 にせず例外にする", async () => {
     throw new AccessUnavailableError("certs down");
   };
   await assert.rejects(verifyAccessJwt(await sign(valid), config, down, now), AccessUnavailableError);
+});
+
+test("Cookie ヘッダーから Access の JWT を全部取る", () => {
+  assert.deepEqual(accessCookies("a=1; CF_Authorization=x.y.z; b=2"), ["x.y.z"]);
+  assert.deepEqual(accessCookies("CF_Authorization=abc=="), ["abc=="]);
+  assert.deepEqual(accessCookies("CF_Authorization=one; CF_Authorization=two"), ["one", "two"]);
+  assert.deepEqual(accessCookies("a=1; CF_Authorization="), []);
+  assert.deepEqual(accessCookies(null), []);
+});
+
+test("クッキーの JWT でメールを返す。同名が並んでも、通るものが 1 つあればよい", async () => {
+  const { loadKeys, sign } = await setup();
+  const good = await sign(valid);
+  assert.equal(await verifyAccessCookie(`CF_Authorization=${good}`, config, loadKeys, now), "me@example.com");
+  assert.equal(await verifyAccessCookie(`CF_Authorization=aaa.bbb.ccc; CF_Authorization=${good}`, config, loadKeys, now), "me@example.com");
+  assert.equal(await verifyAccessCookie(`CF_Authorization=${await sign({ ...valid, aud: ["other"] })}`, config, loadKeys, now), null);
+  assert.equal(await verifyAccessCookie(null, config, loadKeys, now), null);
 });

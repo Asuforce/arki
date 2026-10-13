@@ -1,6 +1,7 @@
 import { defineMiddleware } from "astro:middleware";
 import { AccessUnavailableError, verifyAccessJwt } from "./lib/access";
-import { devBypass, loadAccessConfig, loadAdminApi } from "./lib/admin-config";
+import { devBypass, loadAccessConfig } from "./lib/access-config";
+import { loadAdminApi } from "./lib/admin-config";
 
 declare global {
   namespace App {
