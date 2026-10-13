@@ -32,7 +32,7 @@ npx wrangler d1 execute arki-db --remote --file=../tools/import.sql
 
 本番にもテーブルが要ります。まだなら `migrations apply arki-db --remote` を先に実行してください（[setup.md](setup.md)）。
 
-`import.sql` は記事を含むので `.gitignore` 済みです。コミットしないでください。何度流しても、取り込んだ記事（`legacy_url` が入っているもの）だけが入れ替わり、`arki-post` で書いた記事には触りません。
+`import.sql` は記事を含むので `.gitignore` 済みです。コミットしないでください。何度流しても、取り込んだ記事（`legacy_url` が入っているもの）だけが入れ替わり、管理画面で書いた記事には触りません。
 
 流したあとは件数を確かめます。`--local` でも `--remote` でも同じ SQL です。
 
@@ -41,7 +41,7 @@ npx wrangler d1 execute arki-db --remote --command \
   "SELECT status, count(*) FROM posts GROUP BY status"
 ```
 
-バックアップの記事数と `published`・`draft` の合計が一致し、`legacy_url IS NULL` の記事が `arki-post` で書いた数と同じなら取り込めています。
+バックアップの記事数と `published`・`draft` の合計が一致し、`legacy_url IS NULL` の記事が管理画面で書いた数と同じなら取り込めています。
 
 ## 対応
 

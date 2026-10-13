@@ -1,0 +1,16 @@
+---
+import AdminEditor from "../../../components/AdminEditor.astro";
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import { loadAdminApi } from "../../../lib/admin-config";
+
+const api = loadAdminApi();
+if (!api) return new Response("ADMIN_TOKEN is not set", { status: 503 });
+const id = /^\d+$/.test(Astro.params.id ?? "") ? Number(Astro.params.id) : null;
+const post = id === null ? null : await api.getPost(id);
+if (!post) return new Response("Not Found", { status: 404 });
+const suggestions = await api.categoryNames();
+---
+
+<AdminLayout title={post.title || "編集"}>
+  <AdminEditor post={post} suggestions={suggestions} />
+</AdminLayout>

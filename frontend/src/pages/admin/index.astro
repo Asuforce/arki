@@ -1,0 +1,107 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import { loadAdminApi } from "../../lib/admin-config";
+import { formatDate } from "../../lib/site";
+
+const api = loadAdminApi();
+if (!api) return new Response("ADMIN_TOKEN is not set", { status: 503 });
+
+const status = ["draft", "published"].includes(Astro.url.searchParams.get("status") ?? "") ? Astro.url.searchParams.get("status")! : "";
+const q = (Astro.url.searchParams.get("q") ?? "").trim();
+const page = Math.max(1, Math.floor(Number(Astro.url.searchParams.get("page"))) || 1);
+const list = await api.listPosts({ page, status, q });
+const lastPage = Math.max(1, Math.ceil(list.total / list.limit));
+
+const href = (overrides: Record<string, string | number>): string => {
+  const query = new URLSearchParams();
+  const values: Record<string, string | number> = { status, q, page, ...overrides };
+  for (const [key, value] of Object.entries(values)) if (value && !(key === "page" && value === 1)) query.set(key, String(value));
+  const text = query.toString();
+  return text ? `/admin?${text}` : "/admin";
+};
+const tabs = [
+  { label: "すべて", value: "" },
+  { label: "下書き", value: "draft" },
+  { label: "公開中", value: "published" },
+];
+---
+
+<AdminLayout title="記事">
+  <div class="list-head">
+    <nav class="tabs" aria-label="状態">
+      {tabs.map((t) => <a href={href({ status: t.value, page: 1 })} aria-current={t.value === status ? "page" : undefined}>{t.label}</a>)}
+    </nav>
+    <form class="search" method="get" action="/admin">
+      {status && <input type="hidden" name="status" value={status} />}
+      <input type="search" name="q" value={q} placeholder="タイトルで検索" aria-label="タイトルで検索" />
+      <button type="submit">検索</button>
+    </form>
+  </div>
+
+  <p class="count">{list.total} 件</p>
+  {list.posts.length === 0 && <p class="empty">該当する記事がありません。</p>}
+  <ul class="admin-list">
+    {
+      list.posts.map((post) => (
+        <li data-id={post.id} data-status={post.status} data-title={post.title}>
+          <div class="row-main">
+            <a class="row-title" href={`/admin/edit/${post.id}`}>{post.title || "（題名なし）"}</a>
+            <div class="row-meta">
+              <span class={`badge ${post.status}`}>{post.status === "draft" ? "下書き" : "公開中"}</span>
+              {post.status === "published" && <time datetime={post.published_at}>{formatDate(post.published_at)}</time>}
+              {post.categories.map((c) => <span class="chip">{c}</span>)}
+            </div>
+          </div>
+          <div class="row-actions">
+            {post.status === "published" && <a href={`/entry/${post.slug}`} target="_blank" rel="noopener">表示</a>}
+            <button type="button" data-action="toggle">{post.status === "draft" ? "公開する" : "下書きに戻す"}</button>
+            <button type="button" data-action="delete" class="danger">削除</button>
+          </div>
+        </li>
+      ))
+    }
+  </ul>
+
+  {
+    lastPage > 1 && (
+      <nav class="admin-pagination" aria-label="ページ">
+        {page > 1 ? <a href={href({ page: page - 1 })}>← 前へ</a> : <span />}
+        <span>{page} / {lastPage}</span>
+        {page < lastPage ? <a href={href({ page: page + 1 })}>次へ →</a> : <span />}
+      </nav>
+    )
+  }
+  <p class="notice" id="list-notice" role="status"></p>
+
+  <script>
+    const notice = document.getElementById("list-notice")!;
+    document.querySelector(".admin-list")?.addEventListener("click", async (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-action]");
+      const row = button?.closest<HTMLElement>("li[data-id]");
+      if (!button || !row) return;
+      const id = row.dataset.id;
+      const title = row.dataset.title || "この記事";
+      if (button.dataset.action === "delete" && !confirm(`「${title}」を削除します。元に戻せません。`)) return;
+      const buttons = document.querySelectorAll<HTMLButtonElement>(".admin-list button");
+      buttons.forEach((b) => (b.disabled = true));
+      try {
+        const res =
+          button.dataset.action === "delete"
+            ? await fetch(`/admin/api/posts/${id}`, { method: "DELETE" })
+            : await fetch(`/admin/api/posts/${id}/status`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: row.dataset.status === "draft" ? "published" : "draft" }),
+              });
+        if (res.ok) {
+          location.reload();
+          return;
+        }
+        notice.textContent = `失敗しました（${res.status}）`;
+      } catch {
+        notice.textContent = "通信に失敗しました";
+      }
+      buttons.forEach((b) => (b.disabled = false));
+    });
+  </script>
+</AdminLayout>

@@ -4,8 +4,8 @@
 Cloudflare 上で動くブログエンジンです。はてなブログのバックアップ（`blogsync` で取得した Markdown）を取り込んで表示することもできます。
 
 - `backend/` Cloudflare Workers の API（Rust / workers-rs）と D1 のマイグレーション
-- `frontend/` Astro（SSR）で書いた表示側。見た目は [tintwork](https://github.com/Asuforce/tintwork) のトークンを使います
-- `tools/` はてなブログの取り込み、画像の移行、投稿用 CLI（TypeScript）
+- `frontend/` Astro（SSR）で書いた表示側と、投稿用の管理画面（`/admin`）。見た目は [tintwork](https://github.com/Asuforce/tintwork) のトークンを使います
+- `tools/` はてなブログの取り込み、画像の移行（TypeScript）
 - `docs/` 仕様と手順
 
 記事は D1 だけに入ります。リポジトリには記事も、自分用の設定値も入れません。
@@ -31,7 +31,7 @@ cd frontend && npm install && npm run dev
 | [setup](docs/setup.md) | 設定ファイル、ローカル開発、テスト |
 | [architecture](docs/architecture.md) | 構成、データ、URL、表示のルール |
 | [api](docs/api.md) | API の仕様 |
-| [posting](docs/posting.md) | Markdown を投稿する CLI |
+| [posting](docs/posting.md) | 管理画面での投稿 |
 | [hatena-import](docs/hatena-import.md) | はてなブログの取り込みと画像の移行 |
 | [deploy](docs/deploy.md) | デプロイとバックアップ |
 

@@ -1,0 +1,78 @@
+---
+import type { AdminPost } from "../lib/admin-api";
+import { toJstInput } from "../lib/jst";
+
+interface Props {
+  post: AdminPost | null;
+  suggestions: string[];
+}
+const { post, suggestions } = Astro.props;
+
+const data = {
+  id: post?.id ?? null,
+  title: post?.title ?? "",
+  content: post?.content ?? "",
+  categories: post?.categories ?? [],
+  status: post?.status ?? "draft",
+  slug: post?.slug ?? "",
+  slugFixed: post?.slug_fixed ?? false,
+  date: post && !post.date_unset ? toJstInput(post.published_at) : "",
+  dateUnset: post?.date_unset ?? true,
+  updatedAt: post?.updated_at ?? null,
+};
+---
+
+<form id="editor" class="editor" autocomplete="off">
+  <script type="application/json" id="editor-data" set:html={JSON.stringify(data).replaceAll("<", "\\u003c")} />
+
+  <div class="editor-banner" id="banner" role="status" hidden></div>
+
+  <div class="editor-top">
+    <input id="title" class="title-input" type="text" placeholder="題名" aria-label="題名" value={data.title} />
+    <div class="actions">
+      <span class="state" id="state" role="status"></span>
+      <button type="button" id="save">保存</button>
+      <button type="button" id="toggle-status" class="primary">{data.status === "published" ? "下書きに戻す" : "公開する"}</button>
+      {post && <button type="button" id="delete" class="danger">削除</button>}
+    </div>
+  </div>
+
+  <div class="meta-grid">
+    <div class="field">
+      <label for="category-input">カテゴリ</label>
+      <div class="chips" id="chips">
+        <input id="category-input" type="text" list="category-suggestions" placeholder="追加（Enter）" />
+      </div>
+      <datalist id="category-suggestions">{suggestions.map((name) => <option value={name} />)}</datalist>
+    </div>
+    <div class="field">
+      <label for="date">公開日時（JST）</label>
+      <input id="date" type="datetime-local" value={data.date} />
+      {data.dateUnset && <small>空のまま公開すると、公開した瞬間になります。</small>}
+    </div>
+    <div class="field">
+      <label for="slug">slug</label>
+      <div class="slug-row">
+        <input id="slug" type="text" value={data.slug} readonly placeholder="公開時に公開日時から決まります" />
+        <label class="check"><input id="slug-edit" type="checkbox" />変更する</label>
+      </div>
+      {!data.slugFixed && <small>公開前の仮の値です。初回公開で決まります。</small>}
+    </div>
+  </div>
+
+  <div class="pane-tabs" role="tablist">
+    <button type="button" role="tab" data-pane="write" aria-selected="true">書く</button>
+    <button type="button" role="tab" data-pane="preview" aria-selected="false">プレビュー</button>
+    <button type="button" id="add-image" class="image-button">画像を追加</button>
+    <input id="image-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden />
+  </div>
+
+  <div class="panes" data-active="write">
+    <textarea id="content" class="content-input" spellcheck="false" aria-label="本文（Markdown）" placeholder="本文（Markdown）。画像は貼り付けかドロップで入れられます。"></textarea>
+    <div class="preview post-body" id="preview" aria-label="プレビュー"></div>
+  </div>
+</form>
+
+<script>
+  import "../scripts/editor";
+</script>

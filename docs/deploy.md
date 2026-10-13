@@ -32,6 +32,27 @@ API の Worker は R2 のバケット `arki-images`（バインディング `IMA
 
 `ADMIN_TOKEN` は一度だけ手元で `npx wrangler secret put ADMIN_TOKEN` を実行して設定します（Worker に保存され、デプロイでは消えません）。
 
+## 管理画面の設定
+
+`/admin` は Cloudflare Access（`<ブログのドメイン>/admin*`）で守り、フロントの Worker でも `Cf-Access-Jwt-Assertion` を検証します。Access のアプリは、このリポジトリの外（Terraform など）で作ります。フロントの Worker に、次の 4 つの secret を入れます。
+
+| Secret | 内容 |
+| --- | --- |
+| `ADMIN_TOKEN` | API の Worker と同じ値。フロントがサーバー側から API を呼ぶのに使う |
+| `ACCESS_AUD` | Access アプリの AUD タグ |
+| `ACCESS_TEAM_DOMAIN` | Access のチームドメイン（例: `<team>.cloudflareaccess.com`） |
+| `ADMIN_EMAIL` | 入れるメールアドレス。JWT の `email` がこれと違えば、Access のポリシーが緩んでも通さない |
+
+```bash
+cd frontend
+npx wrangler secret put ADMIN_TOKEN --config dist/server/wrangler.json
+npx wrangler secret put ACCESS_AUD --config dist/server/wrangler.json
+npx wrangler secret put ACCESS_TEAM_DOMAIN --config dist/server/wrangler.json
+npx wrangler secret put ADMIN_EMAIL --config dist/server/wrangler.json
+```
+
+どれかが無いと `/admin` は 503 を返して閉じたままです。JWT が無い、または合わないときは 401 です。Access の署名鍵を取れないときも 503 です（新しい鍵が出たときは、未知の `kid` で 1 分に 1 回まで取り直します）。`ADMIN_TOKEN` はブラウザには渡りません。
+
 ## バックアップ
 
 記事は git に入らないので、次の 2 つで守ります。
