@@ -36,7 +36,6 @@ interface Call {
   body: unknown;
 }
 
-/** 一覧と classify と PATCH を持つ偽の API。 */
 function fakeApi(posts: ListedPost[], opts: { classify?: (id: number, call: number) => Response; patch?: (id: number) => Response } = {}) {
   const calls: Call[] = [];
   const classifyCount = new Map<number, number>();

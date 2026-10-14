@@ -1,5 +1,3 @@
-//! Workers AI で Clef を呼ぶ。要求の組み立てと応答の読み取りはここに閉じ込める。
-//!
 //! 応答のうち `answers.<key>.choice` だけが公式のドキュメントにある。
 //! `confidence` と `probabilities` の場所は未確認なので、読む場所は `read_answer` の 1 か所にする。
 
@@ -15,7 +13,6 @@ const MODEL_PREFIX: &str = "@cf/cloudflare/";
 
 #[derive(Debug, Serialize)]
 pub struct ClefRequest<'a> {
-    /// `@cf/cloudflare/clef` なら `clef`。
     model: &'a str,
     state: &'a str,
     questions: Questions<'a>,
@@ -34,7 +31,6 @@ struct Question<'a> {
     criteria: Criteria<'a>,
 }
 
-/// 門ごとに、使うキーだけを持つ。キーの名前は `Gate::pick_of` と同じ。
 #[derive(Debug, Serialize)]
 struct Criteria<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -79,8 +75,6 @@ impl fmt::Display for ReadError {
     }
 }
 
-/// 応答から `answers.tier` の選択肢、confidence、確率を取り出す。
-/// 確率は無くても読めるが、選択肢と confidence が無ければ誤りにする。
 pub fn read_answer(response: &Value) -> Result<ClefAnswer, ReadError> {
     let answer = response
         .pointer(&format!("/answers/{QUESTION_KEY}"))
@@ -111,7 +105,6 @@ pub fn read_answer(response: &Value) -> Result<ClefAnswer, ReadError> {
     })
 }
 
-/// Workers AI を 1 回呼ぶ。
 pub async fn run(ai: &Ai, model_id: &str, request: &ClefRequest<'_>) -> worker::Result<Value> {
     ai.run(model_id, request).await
 }

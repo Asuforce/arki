@@ -33,7 +33,6 @@ struct PostSummary {
     categories: Vec<String>,
     /// 本文の最初の画像。読み出しのたびに `content` から求める。
     thumbnail: Option<String>,
-    /// 管理者の応答にだけ出す。
     #[serde(flatten)]
     tier_state: Option<TierState>,
 }
@@ -76,7 +75,6 @@ impl PostSummary {
     }
 }
 
-/// 管理者のときだけ tier を詰める。公開の応答には tier の型の値が入らない。
 fn summary_for(row: PostSummaryRow, admin: bool) -> PostSummary {
     let state = TierState::from_columns(row.tier, row.tier_confidence, row.tier_locked);
     let summary = PostSummary::from(row);
@@ -105,7 +103,6 @@ struct Post {
     /// true なら公開日時は決まっておらず、初回公開の瞬間が入る（`published_at` は仮の値）。
     date_unset: bool,
     categories: Vec<String>,
-    /// 管理者の応答にだけ出す。
     #[serde(flatten)]
     tier_state: Option<TierState>,
 }
@@ -167,7 +164,6 @@ fn post_for(row: PostRow, admin: bool) -> Post {
     }
 }
 
-/// 記事の応答の JSON。公開では、編集のための項目と tier を含めない。
 fn post_json(post: &Post, admin: bool) -> Result<serde_json::Value> {
     let mut value = serde_json::to_value(post)?;
     if let Some(object) = value.as_object_mut().filter(|_| !admin) {
@@ -760,8 +756,6 @@ async fn update_post(mut req: Request, ctx: RouteContext<()>) -> Result<Response
     Response::from_json(&json!({ "id": id, "slug": slug, "updated_at": updated_at }))
 }
 
-// ---- ティア ------------------------------------------------------------
-
 fn tier_config(env: &Env) -> std::result::Result<TierConfig, String> {
     let var = |name: &str| env.var(name).ok().map(|v| v.to_string());
     TierConfig::parse(
@@ -771,7 +765,6 @@ fn tier_config(env: &Env) -> std::result::Result<TierConfig, String> {
     )
 }
 
-/// 判定だけをして、書き込まない。
 async fn classify_post(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     if !is_admin(&req, &ctx.env) {
         return json_error("Unauthorized", 401);
@@ -827,7 +820,6 @@ async fn classify_post(req: Request, ctx: RouteContext<()>) -> Result<Response> 
     })
 }
 
-/// 本文と `updated_at` には触れない。ロックの確認と書き込みは 1 つの条件つき UPDATE で行う。
 async fn set_tier(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     if !is_admin(&req, &ctx.env) {
         return json_error("Unauthorized", 401);

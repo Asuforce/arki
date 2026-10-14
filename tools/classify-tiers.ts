@@ -1,13 +1,3 @@
-/**
- * 公開中の記事に、API の Clef 判定でティアを付ける。
- *
- *   ADMIN_TOKEN=... npx tsx classify-tiers.ts --api-url <URL> [--dry-run] [--force] [--delay-ms 500] [--limit N]
- *
- * 判定済み（tier が入っている）記事と、ロック済みの記事は飛ばす。--force は判定済みをやり直すが、ロックは破らない。
- * --dry-run は classify だけを呼び、書き込まない。--limit は判定する記事の数の上限で、飛ばした記事は数えない。
- * 429 と 502 などの 5xx は間隔を広げて 3 回まで再試行し、それでも失敗した記事はエラーを出して次へ進む。
- * classify の 500 と 503 は設定の誤りなので、再試行せずに実行を中断する。連続 5 件が失敗しても中断する。
- */
 import { pathToFileURL } from "node:url";
 
 export interface Args {
@@ -75,7 +65,6 @@ export type Sleep = (ms: number) => Promise<void>;
 
 export const sleep: Sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** 500 と 503 は、設定の誤りか binding の欠落なので、待っても直らない。 */
 export const isConfigFailure = (status: number): boolean => status === 500 || status === 503;
 
 export const isRetryable = (status: number): boolean => status === 429 || (status >= 500 && !isConfigFailure(status));
@@ -85,7 +74,6 @@ const retryAfterMs = (res: Response): number | undefined => {
   return res.headers.get("Retry-After")?.trim() && Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : undefined;
 };
 
-/** 1 秒、2 秒、4 秒と間隔を広げて MAX_RETRIES 回まで再試行する。429 の Retry-After があればそれだけ待つ。 */
 export async function fetchWithRetry(fetchFn: Fetch, sleepFn: Sleep, url: string, init: RequestInit): Promise<Response> {
   for (let attempt = 0; ; attempt++) {
     let res: Response | undefined;
@@ -117,7 +105,6 @@ export interface Summary {
   written: number;
   fallbacks: number;
   errors: number;
-  /** 実行を途中で止めた理由。 */
   aborted?: string;
   byTier: Record<number, number>;
 }
