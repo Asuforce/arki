@@ -392,6 +392,16 @@ pub struct TierState {
     pub tier_locked: bool,
 }
 
+impl TierState {
+    pub fn from_columns(tier: Option<i64>, tier_confidence: Option<f64>, tier_locked: i64) -> Self {
+        TierState {
+            tier,
+            tier_confidence,
+            tier_locked: tier_locked != 0,
+        }
+    }
+}
+
 /// `classify` の応答。
 #[derive(Debug, Serialize)]
 pub struct Classification {

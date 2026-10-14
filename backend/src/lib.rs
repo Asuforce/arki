@@ -64,12 +64,26 @@ impl From<PostSummaryRow> for PostSummary {
             status: row.status,
             published_at: row.published_at,
             categories: Vec::new(),
-            tier_state: Some(TierState {
-                tier: row.tier,
-                tier_confidence: row.tier_confidence,
-                tier_locked: row.tier_locked != 0,
-            }),
+            tier_state: None,
         }
+    }
+}
+
+impl PostSummary {
+    fn with_tier(mut self, state: TierState) -> Self {
+        self.tier_state = Some(state);
+        self
+    }
+}
+
+/// 管理者のときだけ tier を詰める。公開の応答には tier の型の値が入らない。
+fn summary_for(row: PostSummaryRow, admin: bool) -> PostSummary {
+    let state = TierState::from_columns(row.tier, row.tier_confidence, row.tier_locked);
+    let summary = PostSummary::from(row);
+    if admin {
+        summary.with_tier(state)
+    } else {
+        summary
     }
 }
 
@@ -131,13 +145,37 @@ impl From<PostRow> for Post {
             updated_at: row.updated_at,
             legacy_url: row.legacy_url,
             categories: Vec::new(),
-            tier_state: Some(TierState {
-                tier: row.tier,
-                tier_confidence: row.tier_confidence,
-                tier_locked: row.tier_locked != 0,
-            }),
+            tier_state: None,
         }
     }
+}
+
+impl Post {
+    fn with_tier(mut self, state: TierState) -> Self {
+        self.tier_state = Some(state);
+        self
+    }
+}
+
+fn post_for(row: PostRow, admin: bool) -> Post {
+    let state = TierState::from_columns(row.tier, row.tier_confidence, row.tier_locked);
+    let post = Post::from(row);
+    if admin {
+        post.with_tier(state)
+    } else {
+        post
+    }
+}
+
+/// 記事の応答の JSON。公開では、編集のための項目と tier を含めない。
+fn post_json(post: &Post, admin: bool) -> Result<serde_json::Value> {
+    let mut value = serde_json::to_value(post)?;
+    if let Some(object) = value.as_object_mut().filter(|_| !admin) {
+        for key in ADMIN_ONLY_FIELDS {
+            object.remove(*key);
+        }
+    }
+    Ok(value)
 }
 
 #[derive(Debug, Deserialize)]
@@ -377,12 +415,10 @@ async fn list_posts(req: Request, ctx: RouteContext<()>) -> Result<Response> {
         .all()
         .await?
         .results()?;
-    let mut posts: Vec<PostSummary> = rows.into_iter().map(PostSummary::from).collect();
-    if !include_drafts {
-        for post in &mut posts {
-            post.tier_state = None;
-        }
-    }
+    let mut posts: Vec<PostSummary> = rows
+        .into_iter()
+        .map(|row| summary_for(row, include_drafts))
+        .collect();
     attach_categories(&d1, &mut posts).await?;
 
     Response::from_json(&json!({
@@ -397,7 +433,7 @@ async fn fetch_post(
     d1: &D1Database,
     where_sql: &str,
     key: JsValue,
-    include_drafts: bool,
+    admin: bool,
 ) -> Result<Option<Post>> {
     let row: Option<PostRow> = d1
         .prepare(format!(
@@ -405,16 +441,13 @@ async fn fetch_post(
              updated_at, legacy_url, slug_fixed, date_fixed, tier, tier_confidence, tier_locked \
              FROM posts WHERE {where_sql} AND (? = 1 OR status = 'published')"
         ))
-        .bind(&[key, num(include_drafts as i64)])?
+        .bind(&[key, num(admin as i64)])?
         .first(None)
         .await?;
     let Some(row) = row else {
         return Ok(None);
     };
-    let mut post = Post::from(row);
-    if !include_drafts {
-        post.tier_state = None;
-    }
+    let mut post = post_for(row, admin);
     let rows: Vec<CategoryRow> = d1
         .prepare(
             "SELECT pc.post_id AS post_id, c.name AS name FROM post_categories pc \
@@ -435,15 +468,7 @@ async fn get_post_by_slug(req: Request, ctx: RouteContext<()>) -> Result<Respons
     let d1 = ctx.env.d1("DB")?;
     let admin = is_admin(&req, &ctx.env);
     match fetch_post(&d1, "slug = ?", text(slug), admin).await? {
-        Some(post) => {
-            let mut value = serde_json::to_value(&post)?;
-            if let Some(object) = value.as_object_mut().filter(|_| !admin) {
-                for key in ADMIN_ONLY_FIELDS {
-                    object.remove(*key);
-                }
-            }
-            Response::from_json(&value)
-        }
+        Some(post) => Response::from_json(&post_json(&post, admin)?),
         None => json_error("Not Found", 404),
     }
 }
@@ -982,17 +1007,59 @@ mod tests {
         assert!(!object.contains_key("content"));
     }
 
+    fn post_row() -> PostRow {
+        PostRow {
+            id: 1,
+            slug: "2019/11/23/031344".into(),
+            title: "t".into(),
+            content: "本文".into(),
+            excerpt: "e".into(),
+            status: "published".into(),
+            published_at: "2019-11-22T18:13:44Z".into(),
+            created_at: "2019-11-22T18:13:44Z".into(),
+            updated_at: "2019-11-22T18:13:44Z".into(),
+            legacy_url: None,
+            slug_fixed: 1,
+            date_fixed: 1,
+            tier: Some(2),
+            tier_confidence: Some(0.7),
+            tier_locked: 1,
+        }
+    }
+
+    fn tier_keys(value: &serde_json::Value) -> Vec<&String> {
+        value
+            .as_object()
+            .unwrap()
+            .keys()
+            .filter(|k| k.starts_with("tier"))
+            .collect()
+    }
+
     #[test]
     fn summary_shows_tier_only_for_admins() {
-        let mut summary = PostSummary::from(row("本文"));
-        let admin = serde_json::to_value(&summary).unwrap();
+        let admin = serde_json::to_value(summary_for(row("本文"), true)).unwrap();
         assert_eq!(admin["tier"], 2);
         assert_eq!(admin["tier_confidence"], 0.7);
         assert_eq!(admin["tier_locked"], false);
-        summary.tier_state = None;
-        let public = serde_json::to_value(&summary).unwrap();
-        let object = public.as_object().unwrap();
-        assert!(!object.keys().any(|k| k.starts_with("tier")));
+        let public = serde_json::to_value(summary_for(row("本文"), false)).unwrap();
+        assert!(tier_keys(&public).is_empty());
+    }
+
+    #[test]
+    fn post_shows_tier_and_editing_fields_only_for_admins() {
+        let admin = post_json(&post_for(post_row(), true), true).unwrap();
+        assert_eq!(admin["tier"], 2);
+        assert_eq!(admin["tier_locked"], true);
+        for key in ADMIN_ONLY_FIELDS {
+            assert!(admin.get(*key).is_some(), "{key}");
+        }
+        let public = post_json(&post_for(post_row(), false), false).unwrap();
+        assert!(tier_keys(&public).is_empty());
+        for key in ADMIN_ONLY_FIELDS {
+            assert!(public.get(*key).is_none(), "{key}");
+        }
+        assert_eq!(public["content"], "本文");
     }
 
     #[test]
