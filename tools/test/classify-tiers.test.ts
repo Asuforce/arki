@@ -3,6 +3,8 @@ import { test } from "node:test";
 import {
   classifyAll,
   fetchWithRetry,
+  MAX_CONSECUTIVE_FAILURES,
+  REQUEST_TIMEOUT_MS,
   formatSummary,
   parseArgs,
   skipReason,
@@ -163,14 +165,14 @@ test("429 は間隔を広げて再試行し、成功すれば続ける", async (
   assert.equal(s.errors, 0);
 });
 
-test("5xx が続けば初回を含め 4 回で諦め、次の記事へ進む", async () => {
-  const api = fakeApi([post(1), post(2)], { classify: (id) => (id === 1 ? json({}, 503) : json(classification())) });
+test("502 が続けば初回を含め 4 回で諦め、次の記事へ進む", async () => {
+  const api = fakeApi([post(1), post(2)], { classify: (id) => (id === 1 ? json({}, 502) : json(classification())) });
   const s = await classifyAll(api.deps, args(), "tok");
   assert.equal(sent(api.calls, "/posts/1/classify").length, 4);
   assert.deepEqual(api.slept.slice(0, 3), [1000, 2000, 4000]);
   assert.equal(s.errors, 1);
   assert.equal(s.classified, 1);
-  assert.match(api.warns[0], /error 1 s1: classify 503/);
+  assert.match(api.warns[0], /error 1 s1: classify 502/);
 });
 
 test("400 台（429 以外）は再試行しない", async () => {
@@ -188,6 +190,103 @@ test("通信の例外も再試行し、尽きたら投げる", async () => {
   };
   await assert.rejects(fetchWithRetry(failing, async () => {}, "https://api.test", {}), /network/);
   assert.equal(calls, 4);
+});
+
+test("422 は再試行せず、エラーに数えて次へ進む", async () => {
+  const api = fakeApi([post(1), post(2)], { classify: (id) => (id === 1 ? json({ error: "x" }, 422) : json(classification())) });
+  const s = await classifyAll(api.deps, args(), "tok");
+  assert.equal(sent(api.calls, "/posts/1/classify").length, 1);
+  assert.equal(s.errors, 1);
+  assert.equal(s.classified, 1);
+  assert.equal(s.aborted, undefined);
+});
+
+for (const status of [500, 503]) {
+  test(`classify の ${status} は再試行せず、実行を中断して理由を出す`, async () => {
+    const api = fakeApi([post(1), post(2)], { classify: () => json({ error: "tier settings are invalid" }, status) });
+    const s = await classifyAll(api.deps, args(), "tok");
+    assert.equal(sent(api.calls, "/classify").length, 1);
+    assert.equal(api.slept.length, 0);
+    assert.match(s.aborted ?? "", new RegExp(`classify ${status} on 1: .*tier settings are invalid`));
+    assert.equal(s.errors, 0);
+    assert.match(formatSummary(s, false).join("\n"), /aborted: classify/);
+  });
+}
+
+test("連続して失敗が続くと中断し、成功が挟まれば数え直す", async () => {
+  const failing = Array.from({ length: MAX_CONSECUTIVE_FAILURES + 2 }, (_, i) => post(i + 1));
+  const api = fakeApi(failing, { classify: () => json({}, 422) });
+  const s = await classifyAll(api.deps, args(), "tok");
+  assert.equal(sent(api.calls, "/classify").length, MAX_CONSECUTIVE_FAILURES);
+  assert.equal(s.errors, MAX_CONSECUTIVE_FAILURES);
+  assert.match(s.aborted ?? "", /in a row/);
+
+  const mixed = Array.from({ length: MAX_CONSECUTIVE_FAILURES * 2 }, (_, i) => post(i + 1));
+  const ok = fakeApi(mixed, { classify: (id) => (id % MAX_CONSECUTIVE_FAILURES === 0 ? json(classification()) : json({}, 422)) });
+  const t = await classifyAll(ok.deps, args(), "tok");
+  assert.equal(t.aborted, undefined);
+  assert.equal(t.errors, MAX_CONSECUTIVE_FAILURES * 2 - 2);
+});
+
+test("classify が成功して PATCH が失敗した記事は classified に数えず、--limit にも 1 件と数える", async () => {
+  const api = fakeApi([post(1), post(2), post(3)], { patch: (id) => (id === 1 ? json({}, 422) : json({ id })) });
+  const s = await classifyAll(api.deps, args({ limit: 2 }), "tok");
+  assert.equal(s.errors, 1);
+  assert.equal(s.classified, 1);
+  assert.equal(s.written, 1);
+  assert.deepEqual(s.byTier, { 3: 1 });
+  assert.equal(api.logs.length, 1);
+  assert.deepEqual(
+    sent(api.calls, "/classify").map((c) => c.path),
+    ["/api/posts/1/classify", "/api/posts/2/classify"],
+  );
+});
+
+test("fetch に 30 秒のタイムアウトの signal を付ける", async () => {
+  assert.equal(REQUEST_TIMEOUT_MS, 30_000);
+  let signal: AbortSignal | null | undefined;
+  await fetchWithRetry(
+    async (_url, init) => {
+      signal = init?.signal;
+      return json({});
+    },
+    async () => {},
+    "https://api.test",
+    {},
+  );
+  assert.ok(signal instanceof AbortSignal);
+  assert.equal(signal.aborted, false);
+});
+
+test("429 の Retry-After があれば、その秒数だけ待つ", async () => {
+  const waits: number[] = [];
+  let n = 0;
+  const res = await fetchWithRetry(
+    async () => (++n < 3 ? new Response(null, { status: 429, headers: n === 1 ? { "Retry-After": "7" } : {} }) : json({})),
+    async (ms) => void waits.push(ms),
+    "https://api.test",
+    {},
+  );
+  assert.equal(res.status, 200);
+  assert.deepEqual(waits, [7000, 2000]);
+});
+
+test("再試行する応答の body は読み捨てる", async () => {
+  let cancelled = false;
+  let n = 0;
+  const stream = () =>
+    new ReadableStream({
+      cancel() {
+        cancelled = true;
+      },
+    });
+  await fetchWithRetry(
+    async () => (++n === 1 ? new Response(stream(), { status: 502 }) : json({})),
+    async () => {},
+    "https://api.test",
+    {},
+  );
+  assert.equal(cancelled, true);
 });
 
 test("要約は tier ごとの件数とフォールバックの件数を出す", () => {
