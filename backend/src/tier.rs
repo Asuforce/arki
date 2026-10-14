@@ -343,6 +343,23 @@ pub enum TierWrite {
     Unlock,
 }
 
+/// 書き込みの結果の読み方。変更行数が取れないときは成功とみなさない。
+#[derive(Debug, PartialEq, Eq)]
+pub enum WriteOutcome {
+    Applied,
+    /// 自動の書き込みが、ロック済みの行に弾かれた。
+    Locked,
+    Unreadable,
+}
+
+pub fn write_outcome(write: &TierWrite, changes: Option<usize>) -> WriteOutcome {
+    match (write, changes) {
+        (_, None) => WriteOutcome::Unreadable,
+        (TierWrite::Auto { .. }, Some(0)) => WriteOutcome::Locked,
+        _ => WriteOutcome::Applied,
+    }
+}
+
 pub fn tier_from_number(n: i64) -> Option<Tier> {
     match n {
         1 => Some(Tier::Long),
@@ -625,6 +642,24 @@ mod tests {
             r#"{"tier_locked":false,"tier_confidence":0.5}"#,
         ] {
             assert!(parse_tier_write(&input(body)).is_err(), "{body}");
+        }
+    }
+
+    #[test]
+    fn only_an_auto_write_with_no_changes_is_locked() {
+        let auto = TierWrite::Auto {
+            tier: Tier::Diary,
+            confidence: 0.5,
+        };
+        let manual = TierWrite::Manual { tier: Tier::Diary };
+        assert_eq!(write_outcome(&auto, Some(0)), WriteOutcome::Locked);
+        assert_eq!(write_outcome(&auto, Some(1)), WriteOutcome::Applied);
+        for write in [&manual, &TierWrite::Unlock] {
+            assert_eq!(write_outcome(write, Some(0)), WriteOutcome::Applied);
+            assert_eq!(write_outcome(write, Some(1)), WriteOutcome::Applied);
+        }
+        for write in [&auto, &manual, &TierWrite::Unlock] {
+            assert_eq!(write_outcome(write, None), WriteOutcome::Unreadable);
         }
     }
 

@@ -5,7 +5,7 @@ mod util;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tier::{Classification, Gate, TierConfig, TierInput, TierState, TierWrite};
+use tier::{Classification, Gate, TierConfig, TierInput, TierState, TierWrite, WriteOutcome};
 use util::{
     constant_time_eq, epoch_to_iso, first_image_url, is_valid_slug, iso_to_epoch, like_pattern,
     make_excerpt, slug_from_published_at,
@@ -860,14 +860,18 @@ async fn set_tier(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
             .prepare("UPDATE posts SET tier_locked = 0 WHERE id = ?")
             .bind(&[num(id)])?,
     };
-    let changed = statement
+    let changes = statement
         .run()
         .await?
         .meta()
         .ok()
         .flatten()
-        .and_then(|m| m.changes)
-        .unwrap_or(0);
+        .and_then(|m| m.changes);
+    let outcome = tier::write_outcome(&write, changes);
+    if outcome == WriteOutcome::Unreadable {
+        console_error!("tier write: changes unavailable for post {id}");
+        return json_error("tier write result was unreadable", 500);
+    }
 
     let state: Option<TierStateRow> = d1
         .prepare("SELECT tier, tier_confidence, tier_locked FROM posts WHERE id = ?")
@@ -877,7 +881,7 @@ async fn set_tier(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let Some(state) = state else {
         return json_error("Not Found", 404);
     };
-    if changed == 0 {
+    if outcome == WriteOutcome::Locked {
         return json_error("tier is locked", 409);
     }
     Response::from_json(&json!({
