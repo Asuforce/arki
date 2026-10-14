@@ -1,8 +1,11 @@
+mod clef;
 mod images;
+mod tier;
 mod util;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use tier::{Classification, Gate, TierConfig, TierInput, TierState, TierWrite};
 use util::{
     constant_time_eq, epoch_to_iso, first_image_url, is_valid_slug, iso_to_epoch, like_pattern,
     make_excerpt, slug_from_published_at,
@@ -30,6 +33,9 @@ struct PostSummary {
     categories: Vec<String>,
     /// 本文の最初の画像。読み出しのたびに `content` から求める。
     thumbnail: Option<String>,
+    /// 管理者の応答にだけ出す。
+    #[serde(flatten)]
+    tier_state: Option<TierState>,
 }
 
 /// 一覧クエリの 1 行。サムネイルを求めるために `content` を読むが、応答には出さない。
@@ -42,6 +48,9 @@ struct PostSummaryRow {
     excerpt: String,
     status: String,
     published_at: String,
+    tier: Option<i64>,
+    tier_confidence: Option<f64>,
+    tier_locked: i64,
 }
 
 impl From<PostSummaryRow> for PostSummary {
@@ -55,6 +64,11 @@ impl From<PostSummaryRow> for PostSummary {
             status: row.status,
             published_at: row.published_at,
             categories: Vec::new(),
+            tier_state: Some(TierState {
+                tier: row.tier,
+                tier_confidence: row.tier_confidence,
+                tier_locked: row.tier_locked != 0,
+            }),
         }
     }
 }
@@ -77,6 +91,9 @@ struct Post {
     /// true なら公開日時は決まっておらず、初回公開の瞬間が入る（`published_at` は仮の値）。
     date_unset: bool,
     categories: Vec<String>,
+    /// 管理者の応答にだけ出す。
+    #[serde(flatten)]
+    tier_state: Option<TierState>,
 }
 
 #[derive(Deserialize)]
@@ -93,6 +110,9 @@ struct PostRow {
     legacy_url: Option<String>,
     slug_fixed: i64,
     date_fixed: i64,
+    tier: Option<i64>,
+    tier_confidence: Option<f64>,
+    tier_locked: i64,
 }
 
 impl From<PostRow> for Post {
@@ -111,6 +131,11 @@ impl From<PostRow> for Post {
             updated_at: row.updated_at,
             legacy_url: row.legacy_url,
             categories: Vec::new(),
+            tier_state: Some(TierState {
+                tier: row.tier,
+                tier_confidence: row.tier_confidence,
+                tier_locked: row.tier_locked != 0,
+            }),
         }
     }
 }
@@ -342,7 +367,8 @@ async fn list_posts(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     ]);
     let rows: Vec<PostSummaryRow> = d1
         .prepare(format!(
-            "SELECT p.id, p.slug, p.title, p.content, p.excerpt, p.status, p.published_at \
+            "SELECT p.id, p.slug, p.title, p.content, p.excerpt, p.status, p.published_at, \
+             p.tier, p.tier_confidence, p.tier_locked \
              FROM posts p WHERE {filter} \
              ORDER BY CASE WHEN ? = 1 AND p.status = 'draft' THEN 0 ELSE 1 END, \
              p.published_at DESC, p.id DESC LIMIT ? OFFSET ?"
@@ -352,6 +378,11 @@ async fn list_posts(req: Request, ctx: RouteContext<()>) -> Result<Response> {
         .await?
         .results()?;
     let mut posts: Vec<PostSummary> = rows.into_iter().map(PostSummary::from).collect();
+    if !include_drafts {
+        for post in &mut posts {
+            post.tier_state = None;
+        }
+    }
     attach_categories(&d1, &mut posts).await?;
 
     Response::from_json(&json!({
@@ -371,7 +402,7 @@ async fn fetch_post(
     let row: Option<PostRow> = d1
         .prepare(format!(
             "SELECT id, slug, title, content, excerpt, status, published_at, created_at, \
-             updated_at, legacy_url, slug_fixed, date_fixed \
+             updated_at, legacy_url, slug_fixed, date_fixed, tier, tier_confidence, tier_locked \
              FROM posts WHERE {where_sql} AND (? = 1 OR status = 'published')"
         ))
         .bind(&[key, num(include_drafts as i64)])?
@@ -381,6 +412,9 @@ async fn fetch_post(
         return Ok(None);
     };
     let mut post = Post::from(row);
+    if !include_drafts {
+        post.tier_state = None;
+    }
     let rows: Vec<CategoryRow> = d1
         .prepare(
             "SELECT pc.post_id AS post_id, c.name AS name FROM post_categories pc \
@@ -701,6 +735,141 @@ async fn update_post(mut req: Request, ctx: RouteContext<()>) -> Result<Response
     Response::from_json(&json!({ "id": id, "slug": slug, "updated_at": updated_at }))
 }
 
+// ---- ティア ------------------------------------------------------------
+
+fn tier_config(env: &Env) -> std::result::Result<TierConfig, String> {
+    let var = |name: &str| env.var(name).ok().map(|v| v.to_string());
+    TierConfig::parse(
+        var("TIER_MODEL").as_deref(),
+        var("TIER_THRESHOLD_LONG").as_deref(),
+        var("TIER_THRESHOLD_SHORT").as_deref(),
+    )
+}
+
+/// 判定だけをして、書き込まない。
+async fn classify_post(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    if !is_admin(&req, &ctx.env) {
+        return json_error("Unauthorized", 401);
+    }
+    let Some(id) = ctx.param("id").and_then(|v| v.parse::<i64>().ok()) else {
+        return json_error("id must be a number", 400);
+    };
+    let config = match tier_config(&ctx.env) {
+        Ok(config) => config,
+        Err(message) => {
+            console_error!("tier config: {message}");
+            return json_error("tier settings are invalid", 500);
+        }
+    };
+    let Ok(ai) = ctx.env.ai("AI") else {
+        return json_error("AI binding is not configured", 503);
+    };
+    let d1 = ctx.env.d1("DB")?;
+    let Some(post) = fetch_post(&d1, "id = ?", num(id), true).await? else {
+        return json_error("Not Found", 404);
+    };
+
+    let length = tier::visible_length(&post.content);
+    let gate = Gate::of(length);
+    let state = tier::clef_state(&post.title, &post.categories, &post.content);
+    let request = clef::build_request(&config.model, gate, &state);
+    let raw = match clef::run(&ai, &config.model, &request).await {
+        Ok(raw) => raw,
+        Err(e) => {
+            console_error!("clef call failed: {e}");
+            return json_error("classification failed", 502);
+        }
+    };
+    let answer = match clef::read_answer(&raw) {
+        Ok(answer) => answer,
+        Err(e) => {
+            console_error!("clef response unreadable: {e}; response: {raw}");
+            return json_error("classification response was not understood", 502);
+        }
+    };
+    let Some(pick) = gate.pick_of(&answer.choice) else {
+        console_error!("clef chose {:?}, not offered for {gate:?}", answer.choice);
+        return json_error("classification response was not understood", 502);
+    };
+    let verdict = tier::decide(gate, pick, answer.confidence, config.thresholds.of(gate));
+    Response::from_json(&Classification {
+        tier: verdict.tier.number(),
+        confidence: answer.confidence,
+        fallback: verdict.fallback,
+        gate,
+        length,
+        probabilities: answer.probabilities,
+    })
+}
+
+/// 本文と `updated_at` には触れない。ロックの確認と書き込みは 1 つの条件つき UPDATE で行う。
+async fn set_tier(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    if !is_admin(&req, &ctx.env) {
+        return json_error("Unauthorized", 401);
+    }
+    let Some(id) = ctx.param("id").and_then(|v| v.parse::<i64>().ok()) else {
+        return json_error("id must be a number", 400);
+    };
+    let input: TierInput = match req.json().await {
+        Ok(v) => v,
+        Err(_) => return json_error("Invalid JSON body", 400),
+    };
+    let write = match tier::parse_tier_write(&input) {
+        Ok(write) => write,
+        Err(message) => return json_error(message, 400),
+    };
+
+    let d1 = ctx.env.d1("DB")?;
+    let statement = match &write {
+        TierWrite::Manual { tier } => d1
+            .prepare(
+                "UPDATE posts SET tier = ?, tier_confidence = NULL, tier_locked = 1 WHERE id = ?",
+            )
+            .bind(&[num(tier.number()), num(id)])?,
+        TierWrite::Auto { tier, confidence } => d1
+            .prepare(
+                "UPDATE posts SET tier = ?, tier_confidence = ? WHERE id = ? AND tier_locked = 0",
+            )
+            .bind(&[num(tier.number()), JsValue::from_f64(*confidence), num(id)])?,
+        TierWrite::Unlock => d1
+            .prepare("UPDATE posts SET tier_locked = 0 WHERE id = ?")
+            .bind(&[num(id)])?,
+    };
+    let changed = statement
+        .run()
+        .await?
+        .meta()
+        .ok()
+        .flatten()
+        .and_then(|m| m.changes)
+        .unwrap_or(0);
+
+    let state: Option<TierStateRow> = d1
+        .prepare("SELECT tier, tier_confidence, tier_locked FROM posts WHERE id = ?")
+        .bind(&[num(id)])?
+        .first(None)
+        .await?;
+    let Some(state) = state else {
+        return json_error("Not Found", 404);
+    };
+    if changed == 0 {
+        return json_error("tier is locked", 409);
+    }
+    Response::from_json(&json!({
+        "id": id,
+        "tier": state.tier,
+        "tier_confidence": state.tier_confidence,
+        "tier_locked": state.tier_locked != 0,
+    }))
+}
+
+#[derive(Deserialize)]
+struct TierStateRow {
+    tier: Option<i64>,
+    tier_confidence: Option<f64>,
+    tier_locked: i64,
+}
+
 async fn delete_post(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     if !is_admin(&req, &ctx.env) {
         return json_error("Unauthorized", 401);
@@ -739,7 +908,7 @@ fn with_cors(mut response: Response, env: &Env) -> Result<Response> {
     headers.set("Access-Control-Allow-Origin", &origin)?;
     headers.set(
         "Access-Control-Allow-Methods",
-        "GET, POST, PUT, DELETE, OPTIONS",
+        "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     )?;
     headers.set(
         "Access-Control-Allow-Headers",
@@ -764,6 +933,8 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
         .get_async("/api/categories", list_categories)
         .post_async("/api/posts", create_post)
         .put_async("/api/posts/:id", update_post)
+        .post_async("/api/posts/:id/classify", classify_post)
+        .patch_async("/api/posts/:id/tier", set_tier)
         .delete_async("/api/posts/:id", delete_post)
         .post_async("/api/images", images::upload_image)
         .run(req, env.clone())
@@ -796,6 +967,9 @@ mod tests {
             excerpt: "e".into(),
             status: "published".into(),
             published_at: "2019-11-22T18:13:44Z".into(),
+            tier: Some(2),
+            tier_confidence: Some(0.7),
+            tier_locked: 0,
         }
     }
 
@@ -806,6 +980,19 @@ mod tests {
         let object = value.as_object().unwrap();
         assert_eq!(object["thumbnail"], "/img/a.png");
         assert!(!object.contains_key("content"));
+    }
+
+    #[test]
+    fn summary_shows_tier_only_for_admins() {
+        let mut summary = PostSummary::from(row("本文"));
+        let admin = serde_json::to_value(&summary).unwrap();
+        assert_eq!(admin["tier"], 2);
+        assert_eq!(admin["tier_confidence"], 0.7);
+        assert_eq!(admin["tier_locked"], false);
+        summary.tier_state = None;
+        let public = serde_json::to_value(&summary).unwrap();
+        let object = public.as_object().unwrap();
+        assert!(!object.keys().any(|k| k.starts_with("tier")));
     }
 
     #[test]
