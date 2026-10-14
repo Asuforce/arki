@@ -1,6 +1,5 @@
 //! 記事のティア判定の規則。入出力を持たない純関数だけを置く。
 
-use crate::util::make_excerpt;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -175,30 +174,118 @@ impl TierConfig {
 // ---- 長さ ----------------------------------------------------------------
 
 /// 読者に見える文字の数（Unicode のコードポイント）。
-/// タグ、画像、リンクの URL、記号の除去は `make_excerpt` に任せ、ここでは
-/// 複数行にまたがる HTML コメントと、本文中の裸の URL を足して除く。
-/// コードブロックの中身は数える。
+/// フェンスの内側は記号もタグもそのまま数える。外側は HTML コメント、タグ、画像、
+/// リンクの URL、Markdown の記号と裸の URL を除く。`make_excerpt` は使わない（抜粋用の規則で、
+/// 裸の `<` 以降を消すため）。
 pub fn visible_length(markdown: &str) -> usize {
-    let without_comments = strip_html_comments(markdown);
-    let text = make_excerpt(&without_comments, usize::MAX);
-    strip_bare_urls(&text)
+    let mut code = 0;
+    let mut prose = String::new();
+    let mut in_fence = false;
+    let mut in_comment = false;
+    for line in markdown.lines() {
+        let trimmed = line.trim();
+        if !in_comment && trimmed.starts_with("```") {
+            in_fence = !in_fence;
+            continue;
+        }
+        if in_fence {
+            code += trimmed.chars().filter(|c| !c.is_whitespace()).count();
+            continue;
+        }
+        if !in_comment && trimmed.starts_with("<a href=") && trimmed.contains("link-card") {
+            continue;
+        }
+        scan_prose_line(trimmed, &mut in_comment, &mut prose);
+        prose.push(' ');
+    }
+    code + strip_bare_urls(&prose)
         .chars()
         .filter(|c| !c.is_whitespace())
         .count()
 }
 
-fn strip_html_comments(markdown: &str) -> String {
-    let mut out = String::with_capacity(markdown.len());
-    let mut rest = markdown;
-    while let Some(start) = rest.find("<!--") {
-        out.push_str(&rest[..start]);
-        match rest[start + 4..].find("-->") {
-            Some(end) => rest = &rest[start + 4 + end + 3..],
-            None => return out,
+/// タグの `<` の次に来る文字。これ以外の `<` は本文の文字。
+fn starts_tag(next: Option<&char>) -> bool {
+    next.is_some_and(|c| c.is_ascii_alphabetic() || *c == '/' || *c == '!')
+}
+
+fn scan_prose_line(line: &str, in_comment: &mut bool, out: &mut String) {
+    let chars: Vec<char> = line.chars().collect();
+    let find = |from: usize, pred: &dyn Fn(usize) -> bool| (from..chars.len()).find(|&j| pred(j));
+    let mut i = 0;
+    let mut at_start = true;
+    while i < chars.len() {
+        let c = chars[i];
+        if *in_comment {
+            if chars[i..].starts_with(&['-', '-', '>']) {
+                *in_comment = false;
+                i += 3;
+            } else {
+                i += 1;
+            }
+            continue;
+        }
+        if at_start && c == '>' {
+            i += 1;
+            continue;
+        }
+        if !c.is_whitespace() {
+            at_start = false;
+        }
+        match c {
+            '<' if chars[i..].starts_with(&['<', '!', '-', '-']) => {
+                *in_comment = true;
+                i += 4;
+            }
+            '<' if starts_tag(chars.get(i + 1)) => {
+                i = find(i, &|j| chars[j] == '>').map_or(chars.len(), |j| j + 1);
+            }
+            '`' => {
+                let n = chars[i..].iter().take_while(|&&c| c == '`').count();
+                let body = i + n;
+                let close = find(body, &|j| {
+                    chars[j..].iter().take_while(|&&c| c == '`').count() == n
+                        && (j == 0 || chars[j - 1] != '`')
+                });
+                match close {
+                    Some(j) => {
+                        out.extend(&chars[body..j]);
+                        i = j + n;
+                    }
+                    None => i = body,
+                }
+            }
+            '!' if chars.get(i + 1) == Some(&'[')
+                && (i == 0 || !chars[i - 1].is_alphanumeric()) =>
+            {
+                let end = find(i + 2, &|j| chars[j] == ']')
+                    .filter(|&j| chars.get(j + 1) == Some(&'('))
+                    .and_then(|j| find(j + 2, &|k| chars[k] == ')'));
+                match end {
+                    Some(k) => i = k + 1,
+                    None => {
+                        out.push(c);
+                        i += 1;
+                    }
+                }
+            }
+            '[' => match find(i + 1, &|j| chars[j] == ']') {
+                Some(j) => {
+                    out.extend(&chars[i + 1..j]);
+                    i = j + 1;
+                    if chars.get(i) == Some(&'(') {
+                        i = find(i, &|k| chars[k] == ')').map_or(chars.len(), |k| k + 1);
+                    }
+                }
+                None => i += 1,
+            },
+            '#' | '*' | '|' => i += 1,
+            _ => {
+                out.push(c);
+                i += 1;
+            }
         }
     }
-    out.push_str(rest);
-    out
 }
 
 fn is_url_char(c: char) -> bool {
@@ -367,6 +454,46 @@ mod tests {
     #[test]
     fn length_ignores_an_unclosed_comment_to_the_end() {
         assert_eq!(visible_length("あい<!-- 閉じない\nう"), 2);
+    }
+
+    #[test]
+    fn length_counts_a_bare_less_than_in_code_and_after_it() {
+        let md = "前半の本文\n```rust\nif a < b {\n}\n```\n後半の本文";
+        assert_eq!(visible_length(md), 5 + "ifa<b{}".chars().count() + 5);
+    }
+
+    #[test]
+    fn length_keeps_lines_after_a_prose_less_than() {
+        let md = "地の文のx<3\n二行目\n三行目\n四行目\n> 引用";
+        assert_eq!(visible_length(md), 7 + 3 + 3 + 3 + 2);
+    }
+
+    #[test]
+    fn length_counts_an_unclosed_comment_marker_inside_a_fence() {
+        let md = "本文\n```\n<!-- 閉じない\n```\n後半";
+        assert_eq!(visible_length(md), 2 + "<!--閉じない".chars().count() + 2);
+    }
+
+    #[test]
+    fn length_keeps_the_rest_of_the_line_after_vec_macro() {
+        assert_eq!(
+            visible_length("`vec![1, 2, 3]`です"),
+            "vec![1,2,3]".len() + 2
+        );
+        assert_eq!(
+            visible_length("vec![1, 2, 3] です"),
+            "vec!".len() + "1,2,3".len() + 2
+        );
+    }
+
+    #[test]
+    fn length_ignores_a_comment_marker_inside_inline_code() {
+        assert_eq!(visible_length("`<!--`の後ろも数える"), 4 + 7);
+    }
+
+    #[test]
+    fn length_treats_only_letter_slash_or_bang_after_lt_as_a_tag() {
+        assert_eq!(visible_length("a<b>c <br/>d </p>e"), 4);
     }
 
     #[test]
