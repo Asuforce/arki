@@ -784,12 +784,12 @@ async fn classify_post(req: Request, ctx: RouteContext<()>) -> Result<Response> 
         Ok(answer) => answer,
         Err(e) => {
             console_error!("clef response unreadable: {e}; response: {raw}");
-            return json_error("classification response was not understood", 502);
+            return json_error("classification response was not understood", 422);
         }
     };
     let Some(pick) = gate.pick_of(&answer.choice) else {
         console_error!("clef chose {:?}, not offered for {gate:?}", answer.choice);
-        return json_error("classification response was not understood", 502);
+        return json_error("classification response was not understood", 422);
     };
     let verdict = tier::decide(gate, pick, answer.confidence, config.thresholds.of(gate));
     Response::from_json(&Classification {
