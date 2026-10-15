@@ -46,7 +46,7 @@ const pageTitle = title ? `${title} | ${siteTitle}` : siteTitle;
       <div class="container">
         <a class="site-title" href="/"><Ghost variant="mark" />{siteTitle}</a>
         <div class="site-tools">
-          <a class="site-nav" id="admin-link" lang="en" href="/admin" hidden>Admin</a>
+          <a class="site-nav" data-admin-only lang="en" href="/admin" hidden>Admin</a>
           <a class="site-nav" lang="en" href="/category">Category</a>
           <a class="site-nav" lang="en" href="/architecture">Architecture</a>
           <ThemeToggle />
@@ -71,8 +71,7 @@ const pageTitle = title ? `${title} | ${siteTitle}` : siteTitle;
         fetch("/whoami", { cache: "no-store" })
           .then((res) => (res.ok ? res.json() : null))
           .then((body: { admin?: boolean } | null) => {
-            const link = document.getElementById("admin-link");
-            if (link) link.hidden = !body?.admin;
+            document.querySelectorAll<HTMLElement>("[data-admin-only]").forEach((el) => (el.hidden = !body?.admin));
           })
           .catch(() => {});
       }

@@ -28,7 +28,7 @@ flowchart LR
 - `/admin` の応答は `Cache-Control: no-store` と `X-Robots-Tag: noindex` です。書き込みは同一オリジンの要求だけを通します。
 - Access の範囲は `/admin*` だけなので、Astro が自動で公開する `/_actions` と `/_server-islands` は 404 にします。
 - 管理用の API クライアントは `lib/admin-api.ts` に分けてあります。公開側の `lib/api.ts` はトークンを持たず、下書きが一覧や RSS に出ません。
-- 公開ページのヘッダーの「Admin」リンクは、ログイン中だけ出します。公開ページは共有キャッシュされるので、ページ自体は変えず、ブラウザが `/whoami`（`no-store`）に尋ねます。Access は `/admin*` の外に `Cf-Access-Jwt-Assertion` を付けないため、`/whoami` は `CF_Authorization` クッキーの JWT を同じ検証にかけ、`{"admin": true | false}` を返します。リンクを出すだけで、権限は `/admin*` 側で改めて確かめます（セッションを失効させても JWT の期限まではリンクが出ます）。Access アプリの Cookie Path Attribute は無効のままにします。有効にすると、クッキーが `/admin` にしか付かず、`/whoami` に届かないのでリンクが出ません。
+- 公開ページのヘッダーの「Admin」リンクと、記事詳細の「Edit」ボタン（`data-admin-only` を付けた要素）は、ログイン中だけ出します。公開ページは共有キャッシュされるので、ページ自体は変えず、ブラウザが `/whoami`（`no-store`）に尋ねます。Access は `/admin*` の外に `Cf-Access-Jwt-Assertion` を付けないため、`/whoami` は `CF_Authorization` クッキーの JWT を同じ検証にかけ、`{"admin": true | false}` を返します。リンクやボタンを出すだけで、権限は `/admin*` 側で改めて確かめます（セッションを失効させても JWT の期限まではリンクが出ます）。Access アプリの Cookie Path Attribute は無効のままにします。有効にすると、クッキーが `/admin` にしか付かず、`/whoami` に届かないのでリンクが出ません。
 - 見た目は公開側のトークンとフォントを共有し、星とゴーストは出しません。
 
 ## データ

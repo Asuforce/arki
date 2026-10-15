@@ -29,6 +29,7 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
             </span>
           )
         }
+        <a class="edit-link" data-admin-only lang="en" href={`/admin/edit/${post.id}`} hidden>Edit</a>
       </p>
     </header>
     <div class="post-body" set:html={html} />
