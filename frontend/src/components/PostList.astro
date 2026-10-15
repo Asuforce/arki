@@ -24,8 +24,8 @@ const yearOf = (iso: string): string => formatDate(iso).slice(0, 4);
         ),
         (
         <li class:list={{ "has-thumb": post.thumbnail, featured: feature && i === 0 }} style={`--i:${i}`}>
+          <time datetime={post.published_at}>{formatDate(post.published_at)}</time>
           <div class="post-main">
-            <time datetime={post.published_at}>{formatDate(post.published_at)}</time>
             <a class="post-title" href={`/entry/${post.slug}`}>
               {post.title}
               <span class="post-arrow" aria-hidden="true">→</span>

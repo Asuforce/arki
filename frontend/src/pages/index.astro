@@ -2,10 +2,11 @@
 import PostList from "../components/PostList.astro";
 import Pagination from "../components/Pagination.astro";
 import Layout from "../layouts/Layout.astro";
-import { listPosts } from "../lib/api";
+import { listCategories, listPosts } from "../lib/api";
 import { authorName, formatDate, siteTitle } from "../lib/site";
 
-const { posts, page, limit, total } = await listPosts({ page: 1 });
+const [{ posts, page, limit, total }, categories] = await Promise.all([listPosts({ page: 1 }), listCategories().catch(() => [])]);
+const topCategories = [...categories].sort((a, b) => b.count - a.count).slice(0, 8);
 Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
 ---
 
@@ -22,6 +23,19 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
       )
     }
   </section>
+  {
+    topCategories.length > 0 && (
+      <nav class="cat-strip" aria-label="Categories">
+        {topCategories.map((c) => (
+          <a href={`/category/${encodeURIComponent(c.name)}`}>
+            {c.name}
+            <span class="count">{c.count}</span>
+          </a>
+        ))}
+        <a class="all" lang="en" href="/category">All →</a>
+      </nav>
+    )
+  }
   <h2 class="section-label" lang="en">Latest</h2>
   <PostList posts={posts} feature={page === 1} />
   <Pagination page={page} limit={limit} total={total} basePath="/" />
