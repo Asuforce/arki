@@ -39,7 +39,9 @@ a { color: var(--accent-text); }
 .post-list li.year-mark { padding: 2.5rem 0 0.5rem; border-bottom: 0; animation: none; font-family: var(--display); font-weight: 700; font-size: clamp(3rem, 12vw, 6rem); line-height: 1; color: transparent; -webkit-text-stroke: 1px var(--muted); user-select: none; }
 .post-list li.year-mark::before { display: none; }
 .post-list li::before { content: ""; position: absolute; left: 0; bottom: -1px; height: 2px; width: 100%; background: var(--accent); transform: scaleX(0); transform-origin: left; transition: transform 500ms var(--ease); }
-.post-list li:hover::before, .post-list li:focus-within::before { transform: scaleX(1); }
+/* 戻る操作で復元されたフォーカスでは出さない。キーボード操作(:focus-visible)のときだけ */
+@media (hover: hover) { .post-list li:hover::before { transform: scaleX(1); } }
+.post-list li:has(:focus-visible)::before { transform: scaleX(1); }
 .post-list li > time, .meta time { display: block; font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.35rem; }
 .post-title, .post h1, .excerpt, .post-body { word-break: auto-phrase; text-wrap: pretty; }
 .post-title { display: block; font-family: var(--display); font-size: clamp(1.2rem, 3.2vw, 1.6rem); font-weight: 700; line-height: 1.4; color: var(--text); text-decoration: none; }
