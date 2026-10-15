@@ -4,8 +4,8 @@ mod util;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use util::{
-    constant_time_eq, epoch_to_iso, first_image_url, is_valid_slug, iso_to_epoch, like_pattern,
-    make_excerpt, slug_from_published_at,
+    constant_time_eq, epoch_to_iso, first_image_url, is_valid_month, is_valid_slug, iso_to_epoch,
+    like_pattern, make_excerpt, slug_from_published_at,
 };
 use worker::wasm_bindgen::JsValue;
 use worker::*;
@@ -287,12 +287,7 @@ fn status_filter(req: &Request, is_admin: bool) -> Result<String> {
 /// 一覧の `month`（`YYYY-MM`、JST）。形が違えば無視する。
 fn month_filter(req: &Request) -> Result<String> {
     let month = query_param(req, "month")?.unwrap_or_default();
-    let b = month.as_bytes();
-    let valid = b.len() == 7
-        && b[4] == b'-'
-        && b[..4].iter().all(u8::is_ascii_digit)
-        && b[5..].iter().all(u8::is_ascii_digit)
-        && matches!(&month[5..], "01" | "02" | "03" | "04" | "05" | "06" | "07" | "08" | "09" | "10" | "11" | "12");
+    let valid = is_valid_month(&month);
     Ok(if valid { month } else { String::new() })
 }
 
