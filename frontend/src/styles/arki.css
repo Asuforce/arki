@@ -149,3 +149,15 @@ main > h1 { font-family: var(--display); font-weight: 700; letter-spacing: 0.02e
 .toc { margin: 1.5rem 0; padding: 1rem 1.2rem; border: 1px solid var(--rule); font-size: 0.9rem; }
 .toc ul { list-style: none; margin: 0; padding: 0; }
 .toc .toc-l3 { padding-left: 1.2rem; }
+
+.archive-year { margin-block: 2rem; }
+.archive-year h2 { font-family: var(--display); font-size: 1.6rem; display: flex; align-items: baseline; gap: 0.75rem; border-bottom: 1px solid var(--rule); padding-bottom: 0.4rem; }
+.archive-year .count, .archive-months .count { color: var(--muted); font-family: var(--mono); font-size: 0.8rem; font-weight: 400; }
+.archive-months { list-style: none; padding: 0; margin: 1rem 0 0; display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.5rem; }
+.archive-months li > * { display: flex; justify-content: space-between; align-items: baseline; gap: 0.25rem; padding: 0.6rem 0.7rem; border: 1px solid var(--rule); text-decoration: none; color: var(--text); }
+.archive-months li > a:hover { border-color: var(--accent-text); color: var(--accent-text); }
+.archive-months li.none > * { color: var(--muted); opacity: 0.45; }
+@media (max-width: 640px) { .archive-months { grid-template-columns: repeat(3, 1fr); } }
+.month-nav { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--rule); font-size: 0.9rem; }
+.month-nav a { color: var(--text-soft); text-decoration: none; }
+.month-nav a:hover { color: var(--accent-text); }

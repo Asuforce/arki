@@ -36,9 +36,10 @@ async function get<T>(path: string): Promise<T | null> {
   return (await res.json()) as T;
 }
 
-export async function listPosts(opts: { page?: number; limit?: number; category?: string } = {}): Promise<PostList> {
+export async function listPosts(opts: { page?: number; limit?: number; category?: string; month?: string } = {}): Promise<PostList> {
   const q = new URLSearchParams({ page: String(opts.page ?? 1), limit: String(opts.limit ?? 20) });
   if (opts.category) q.set("category", opts.category);
+  if (opts.month) q.set("month", opts.month);
   const list = await get<PostList>(`/api/posts?${q}`);
   if (!list) throw new Error("API /api/posts not found");
   return list;
@@ -53,4 +54,15 @@ export function getPost(slug: string): Promise<Post | null> {
 export async function listCategories(): Promise<CategoryCount[]> {
   const res = await get<{ categories: CategoryCount[] }>("/api/categories");
   return res?.categories ?? [];
+}
+
+export interface MonthCount {
+  /** JST の `YYYY-MM` */
+  month: string;
+  count: number;
+}
+
+export async function listArchive(): Promise<MonthCount[]> {
+  const res = await get<{ months: MonthCount[] }>("/api/archive");
+  return res?.months ?? [];
 }
