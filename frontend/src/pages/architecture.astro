@@ -1,5 +1,7 @@
 ---
 import Layout from "../layouts/Layout.astro";
+
+Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
 ---
 
 <Layout title="Architecture" description="arki のシステム構成を C4 モデルで示した図">
@@ -38,7 +40,7 @@ import Layout from "../layouts/Layout.astro";
 <rect class="ext" x="710" y="150" width="160" height="70" rx="8"/><text class="t" x="790" y="178" text-anchor="middle">Cloudflare Access</text><text class="d" x="790" y="198" text-anchor="middle">/admin* の入口</text>
 <rect class="bound" x="20" y="250" width="860" height="300" rx="10"/><text class="bl" x="36" y="272">arki（Cloudflare）</text>
 <rect class="cont" x="40" y="290" width="270" height="110" rx="8"/><text class="t" x="175" y="318" text-anchor="middle">Frontend Worker</text><text class="k" x="175" y="334" text-anchor="middle">[Astro SSR + 静的ファイル]</text><text class="d" x="175" y="356" text-anchor="middle">公開ページ、RSS、/admin、/whoami</text><text class="d" x="175" y="374" text-anchor="middle">JWT 検証 middleware</text>
-<rect class="cont" x="400" y="290" width="270" height="110" rx="8"/><text class="t" x="535" y="318" text-anchor="middle">API Worker</text><text class="k" x="535" y="334" text-anchor="middle">[Rust / workers-rs]</text><text class="d" x="535" y="356" text-anchor="middle">記事・カテゴリ・画像の JSON API</text><text class="d" x="535" y="374" text-anchor="middle">Bearer ADMIN_TOKEN で書き込み</text>
+<rect class="cont" x="400" y="290" width="270" height="110" rx="8"/><text class="t" x="535" y="318" text-anchor="middle">API Worker</text><text class="k" x="535" y="334" text-anchor="middle">[Rust / workers-rs]</text><text class="d" x="535" y="356" text-anchor="middle">記事・カテゴリ・画像の JSON API</text><text class="d" x="535" y="374" text-anchor="middle">管理用トークンで書き込み</text>
 <rect class="store" x="400" y="450" width="120" height="75" rx="8"/><text class="t" x="460" y="482" text-anchor="middle">D1</text><text class="d" x="460" y="502" text-anchor="middle">記事・カテゴリ</text>
 <rect class="store" x="550" y="450" width="120" height="75" rx="8"/><text class="t" x="610" y="482" text-anchor="middle">R2</text><text class="d" x="610" y="502" text-anchor="middle">画像（AVIF）</text>
 <rect class="cont" x="740" y="320" width="120" height="75" rx="8"/><text class="t" x="800" y="350" text-anchor="middle">Images</text><text class="d" x="800" y="370" text-anchor="middle">AVIF へ変換</text>
@@ -54,7 +56,7 @@ import Layout from "../layouts/Layout.astro";
 <path class="edge" d="M310 490L400 490" marker-end="url(#a)" stroke-dasharray="4 3"/><text class="lbl" x="320" y="482">SQL</text>
 </svg></div>
 <ul class="points">
-<li>ブラウザは <code>ADMIN_TOKEN</code> を持たず、Frontend Worker がサーバー側から API を呼びます。</li>
+<li>ブラウザは 管理用トークンを持たず、Frontend Worker がサーバー側から API を呼びます。</li>
 <li>守りは 2 重です。Access が入口で止め、Frontend Worker も JWT の署名・<code>aud</code>・<code>iss</code>・期限・<code>email</code> を検証します。</li>
 <li>Import tools は SQL ファイルを作って D1 に流し込みます（実行時の経路ではありません）。</li>
 </ul>
@@ -67,7 +69,7 @@ import Layout from "../layouts/Layout.astro";
 <rect class="ext" x="20" y="20" width="170" height="70" rx="8"/><text class="t" x="105" y="50" text-anchor="middle">Frontend Worker</text><text class="d" x="105" y="70" text-anchor="middle">HTTP / JSON</text>
 <rect class="bound" x="220" y="20" width="660" height="340" rx="10"/><text class="bl" x="236" y="42">API Worker</text>
 <rect class="comp" x="250" y="60" width="200" height="90" rx="8"/><text class="t" x="350" y="88" text-anchor="middle">Router / CORS</text><text class="d" x="350" y="108" text-anchor="middle">lib.rs</text><text class="d" x="350" y="126" text-anchor="middle">経路、CORS、エラー応答</text>
-<rect class="comp" x="500" y="60" width="200" height="90" rx="8"/><text class="t" x="600" y="88" text-anchor="middle">Auth</text><text class="d" x="600" y="108" text-anchor="middle">lib.rs</text><text class="d" x="600" y="126" text-anchor="middle">Bearer ADMIN_TOKEN</text>
+<rect class="comp" x="500" y="60" width="200" height="90" rx="8"/><text class="t" x="600" y="88" text-anchor="middle">Auth</text><text class="d" x="600" y="108" text-anchor="middle">lib.rs</text><text class="d" x="600" y="126" text-anchor="middle">管理用トークン（Bearer）</text>
 <rect class="comp" x="250" y="190" width="200" height="90" rx="8"/><text class="t" x="350" y="218" text-anchor="middle">Posts handlers</text><text class="d" x="350" y="238" text-anchor="middle">lib.rs</text><text class="d" x="350" y="256" text-anchor="middle">一覧・取得・作成・更新・削除</text>
 <rect class="comp" x="500" y="190" width="200" height="90" rx="8"/><text class="t" x="600" y="218" text-anchor="middle">Image upload</text><text class="d" x="600" y="238" text-anchor="middle">images.rs</text><text class="d" x="600" y="256" text-anchor="middle">検証 → AVIF 変換 → 保存</text>
 <rect class="comp" x="730" y="190" width="130" height="90" rx="8"/><text class="t" x="795" y="218" text-anchor="middle">Utilities</text><text class="d" x="795" y="238" text-anchor="middle">util.rs</text><text class="d" x="795" y="256" text-anchor="middle">slug、時刻</text>
@@ -94,7 +96,7 @@ import Layout from "../layouts/Layout.astro";
 <rect class="comp" x="330" y="60" width="240" height="100" rx="8"/><text class="t" x="450" y="88" text-anchor="middle">Public pages</text><text class="d" x="450" y="108" text-anchor="middle">pages/ index, entry, category, page</text><text class="d" x="450" y="126" text-anchor="middle">rss.xml, whoami</text><text class="d" x="450" y="144" text-anchor="middle">共有キャッシュ可</text>
 <rect class="comp" x="620" y="60" width="240" height="100" rx="8"/><text class="t" x="740" y="88" text-anchor="middle">Admin pages</text><text class="d" x="740" y="108" text-anchor="middle">pages/admin/*, AdminEditor</text><text class="d" x="740" y="126" text-anchor="middle">編集・プレビュー・画像 API</text><text class="d" x="740" y="144" text-anchor="middle">no-store, noindex</text>
 <rect class="comp" x="330" y="210" width="240" height="90" rx="8"/><text class="t" x="450" y="238" text-anchor="middle">Public API client</text><text class="d" x="450" y="258" text-anchor="middle">lib/api.ts</text><text class="d" x="450" y="276" text-anchor="middle">トークンなし。公開記事のみ</text>
-<rect class="comp" x="620" y="210" width="240" height="90" rx="8"/><text class="t" x="740" y="238" text-anchor="middle">Admin API client</text><text class="d" x="740" y="258" text-anchor="middle">lib/admin-api.ts</text><text class="d" x="740" y="276" text-anchor="middle">Bearer ADMIN_TOKEN、下書きも扱う</text>
+<rect class="comp" x="620" y="210" width="240" height="90" rx="8"/><text class="t" x="740" y="238" text-anchor="middle">Admin API client</text><text class="d" x="740" y="258" text-anchor="middle">lib/ の管理用クライアント</text><text class="d" x="740" y="276" text-anchor="middle">管理用トークン付き、下書きも扱う</text>
 <rect class="comp" x="40" y="210" width="240" height="90" rx="8"/><text class="t" x="160" y="238" text-anchor="middle">Markdown renderer</text><text class="d" x="160" y="258" text-anchor="middle">lib/render.ts, ogp.ts</text><text class="d" x="160" y="276" text-anchor="middle">GFM → サニタイズ、ブログカード</text>
 <rect class="comp" x="40" y="340" width="240" height="90" rx="8"/><text class="t" x="160" y="368" text-anchor="middle">Look &amp; feel</text><text class="d" x="160" y="388" text-anchor="middle">tintwork トークン、Layout</text><text class="d" x="160" y="406" text-anchor="middle">Starfield、Ghost、テーマ切替</text>
 <rect class="cont" x="400" y="360" width="200" height="70" rx="8"/><text class="t" x="500" y="390" text-anchor="middle">API Worker</text><text class="d" x="500" y="410" text-anchor="middle">[Container]</text>
@@ -110,7 +112,7 @@ import Layout from "../layouts/Layout.astro";
 <h2 class="section-label" id="flow"><span lang="en">Dynamic</span> · 投稿・公開の流れ</h2>
 <ul class="points">
 <li><b>読む:</b> ブラウザ → Frontend Worker →（<code>fetch</code>）→ API Worker → D1。Markdown を HTML にして返し、公開ページは共有キャッシュされます。</li>
-<li><b>書く:</b> 管理者 → Cloudflare Access（Google ログイン）→ Frontend Worker が JWT を検証 → <code>ADMIN_TOKEN</code> 付きで API を呼ぶ → D1 に保存。</li>
+<li><b>書く:</b> 管理者 → Cloudflare Access（Google ログイン）→ Frontend Worker が JWT を検証 → 管理用トークン付きで API を呼ぶ → D1 に保存。</li>
 <li><b>画像:</b> 管理画面から送信 → API が Images で AVIF に変換 → R2 に保存し、公開 URL を返します。</li>
 <li><b>移行:</b> はてなブログのバックアップ（Markdown）→ <code>tools/import-hatena.ts</code> が SQL を生成 → D1 に投入します。</li>
 <li><b>デプロイ:</b> main の CI 成功後、GitHub Actions が D1 マイグレーション → API → Frontend の順に <code>wrangler deploy</code> します。</li>
