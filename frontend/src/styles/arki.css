@@ -85,7 +85,12 @@ a { color: var(--accent-text); }
 @keyframes rise { from { opacity: 0; translate: 0 18px; } to { opacity: 1; translate: 0 0; } }
 @media (prefers-reduced-motion: reduce) { .cat-strip, .post-list li { animation: none; } .post-list li::before, .thumb { transition: none; } }
 .pagination { display: flex; justify-content: space-between; margin-top: 2.5rem; font-family: var(--display); font-weight: 700; font-size: 0.875rem; letter-spacing: 0.08em; text-transform: uppercase; }
-.pagination .current { color: var(--muted); font-family: var(--mono); }
+.pagination { align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.pagination .pages { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 0.25rem; font-family: var(--mono); font-weight: 400; }
+.pagination .pages a, .pagination .pages .current { display: inline-block; min-width: 2.25rem; padding: 0.4rem 0.5rem; text-align: center; text-decoration: none; }
+.pagination .current { color: var(--text); font-family: var(--mono); border-bottom: 2px solid currentColor; }
+.pagination .gap { color: var(--muted); padding: 0.4rem 0.25rem; }
+@media (max-width: 520px) { .pagination .pages { order: 3; width: 100%; } }
 
 .category-list { list-style: none; padding: 0; }
 .category-list li { padding-block: 0.9rem; border-bottom: 1px solid var(--rule); font-family: var(--display); font-size: 1.4rem; font-weight: 700; display: flex; align-items: baseline; justify-content: space-between; }

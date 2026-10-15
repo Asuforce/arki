@@ -1,5 +1,6 @@
 ---
 import { pageHref } from "../lib/site";
+import { pageWindow } from "../lib/pagination";
 
 interface Props {
   page: number;
@@ -15,7 +16,17 @@ const lastPage = Math.max(1, Math.ceil(total / limit));
   lastPage > 1 && (
     <nav class="pagination" lang="en" aria-label="Pagination">
       {page > 1 ? <a rel="prev" href={pageHref(page - 1, basePath)}>← Newer</a> : <span />}
-      <span class="current">{page} / {lastPage}</span>
+      <ol class="pages">
+        {pageWindow(page, lastPage).map((n) =>
+          n === null ? (
+            <li class="gap" aria-hidden="true">…</li>
+          ) : n === page ? (
+            <li><span class="current" aria-current="page">{n}</span></li>
+          ) : (
+            <li><a href={pageHref(n, basePath)}>{n}</a></li>
+          ),
+        )}
+      </ol>
       {page < lastPage ? <a rel="next" href={pageHref(page + 1, basePath)}>Older →</a> : <span />}
     </nav>
   )
