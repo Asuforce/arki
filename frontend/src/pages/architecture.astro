@@ -1,0 +1,158 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
+---
+
+<Layout title="Architecture" description="arki のシステム構成を C4 モデルで示した図">
+<p class="kicker" lang="en">C4 model</p>
+<h1 class="page-title" lang="en">Architecture</h1>
+<p class="lead">arki は Cloudflare 上で動くブログエンジンです。システムの構成を <a href="https://c4model.com/" rel="noopener noreferrer">C4 モデル</a>の 3 つの階層（Context → Container → Component）で示します。</p>
+<nav class="toc" lang="en"><a href="#l1">1. System Context</a><a href="#l2">2. Container</a><a href="#l3">3. Component（API）</a><a href="#l3b">3. Component（Frontend）</a><a href="#flow">投稿・公開の流れ</a></nav>
+<div class="legend"><span><i class="person"></i>人</span><span><i class="system"></i>arki（対象システム）</span><span><i class="ext"></i>外部システム</span><span><i class="cont"></i>コンテナ</span><span><i class="store"></i>データストア</span><span><i class="comp"></i>コンポーネント</span></div>
+
+<!-- ===== Level 1 ===== -->
+<h2 class="section-label" id="l1"><span lang="en">Level 1</span> · System Context</h2>
+<p class="note">arki を使う人と、arki がやり取りする外部システム。</p>
+<div class="diagram">
+<svg viewBox="0 0 900 460" role="img" aria-label="System Context 図">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>
+<rect class="person" x="60" y="30" width="220" height="90" rx="8"/><text class="t" x="170" y="62" text-anchor="middle">読者</text><text class="k" x="170" y="80" text-anchor="middle">[Person]</text><text class="d" x="170" y="100" text-anchor="middle">記事を読む（誰でも）</text>
+<rect class="person" x="620" y="30" width="220" height="90" rx="8"/><text class="t" x="730" y="62" text-anchor="middle">管理者（ブログの著者）</text><text class="k" x="730" y="80" text-anchor="middle">[Person]</text><text class="d" x="730" y="100" text-anchor="middle">記事を書く・画像を上げる</text>
+<rect class="system" x="290" y="190" width="320" height="110" rx="8"/><text class="t" x="450" y="232" text-anchor="middle">arki</text><text class="k" x="450" y="250" text-anchor="middle">[Software System]</text><text class="d" x="450" y="272" text-anchor="middle">記事の表示と投稿ができるブログエンジン</text>
+<rect class="ext" x="20" y="350" width="200" height="80" rx="8"/><text class="t" x="120" y="382" text-anchor="middle">はてなブログ</text><text class="k" x="120" y="398" text-anchor="middle">[External]</text><text class="d" x="120" y="416" text-anchor="middle">旧ブログ（blogsync の Markdown）</text>
+<rect class="ext" x="350" y="350" width="200" height="80" rx="8"/><text class="t" x="450" y="382" text-anchor="middle">リンク先 / 埋め込み元</text><text class="k" x="450" y="398" text-anchor="middle">[External]</text><text class="d" x="450" y="416" text-anchor="middle">OGP、YouTube、X</text>
+<rect class="ext" x="680" y="350" width="200" height="80" rx="8"/><text class="t" x="780" y="382" text-anchor="middle">Cloudflare Access</text><text class="k" x="780" y="398" text-anchor="middle">[External]</text><text class="d" x="780" y="416" text-anchor="middle">Google ログインで /admin を守る</text>
+<path class="edge" d="M170 120L170 150L350 190" marker-end="url(#a)"/><text class="lbl" x="130" y="150">記事を閲覧</text>
+<path class="edge" d="M730 120L730 160L560 190" marker-end="url(#a)"/><text class="lbl" x="745" y="170">投稿・編集</text>
+<path class="edge" d="M780 350L780 330L600 290" marker-end="url(#a)"/><text class="lbl" x="700" y="335">本人確認（JWT）</text>
+<path class="edge" d="M120 350L120 320L320 295" marker-end="url(#a)"/><text class="lbl" x="30" y="335">取り込み（tools）</text>
+<path class="edge" d="M450 300L450 350" marker-end="url(#a)"/><text class="lbl" x="458" y="332">OGP 取得・埋め込み</text>
+</svg></div>
+
+<!-- ===== Level 2 ===== -->
+<h2 class="section-label" id="l2"><span lang="en">Level 2</span> · Container</h2>
+<p class="note">arki を構成する、デプロイされる単位（Worker）とデータストア。</p>
+<div class="diagram">
+<svg viewBox="0 0 900 560" role="img" aria-label="Container 図">
+<rect class="person" x="30" y="20" width="160" height="70" rx="8"/><text class="t" x="110" y="50" text-anchor="middle">読者</text><text class="d" x="110" y="70" text-anchor="middle">[Person]</text>
+<rect class="person" x="710" y="20" width="160" height="70" rx="8"/><text class="t" x="790" y="50" text-anchor="middle">管理者</text><text class="d" x="790" y="70" text-anchor="middle">[Person]</text>
+<rect class="ext" x="710" y="150" width="160" height="70" rx="8"/><text class="t" x="790" y="178" text-anchor="middle">Cloudflare Access</text><text class="d" x="790" y="198" text-anchor="middle">/admin* の入口</text>
+<rect class="bound" x="20" y="250" width="860" height="300" rx="10"/><text class="bl" x="36" y="272">arki（Cloudflare）</text>
+<rect class="cont" x="40" y="290" width="270" height="110" rx="8"/><text class="t" x="175" y="318" text-anchor="middle">Frontend Worker</text><text class="k" x="175" y="334" text-anchor="middle">[Astro SSR + 静的ファイル]</text><text class="d" x="175" y="356" text-anchor="middle">公開ページ、RSS、/admin、/whoami</text><text class="d" x="175" y="374" text-anchor="middle">JWT 検証 middleware</text>
+<rect class="cont" x="400" y="290" width="270" height="110" rx="8"/><text class="t" x="535" y="318" text-anchor="middle">API Worker</text><text class="k" x="535" y="334" text-anchor="middle">[Rust / workers-rs]</text><text class="d" x="535" y="356" text-anchor="middle">記事・カテゴリ・画像の JSON API</text><text class="d" x="535" y="374" text-anchor="middle">管理用トークンで書き込み</text>
+<rect class="store" x="400" y="450" width="120" height="75" rx="8"/><text class="t" x="460" y="482" text-anchor="middle">D1</text><text class="d" x="460" y="502" text-anchor="middle">記事・カテゴリ</text>
+<rect class="store" x="550" y="450" width="120" height="75" rx="8"/><text class="t" x="610" y="482" text-anchor="middle">R2</text><text class="d" x="610" y="502" text-anchor="middle">画像（AVIF）</text>
+<rect class="cont" x="740" y="320" width="120" height="75" rx="8"/><text class="t" x="800" y="350" text-anchor="middle">Images</text><text class="d" x="800" y="370" text-anchor="middle">AVIF へ変換</text>
+<rect class="cont" x="40" y="450" width="270" height="75" rx="8"/><text class="t" x="175" y="478" text-anchor="middle">Import tools</text><text class="k" x="175" y="494" text-anchor="middle">[TypeScript / CLI]</text><text class="d" x="175" y="512" text-anchor="middle">はてな取り込み、画像移行</text>
+<path class="edge" d="M110 90L110 290" marker-end="url(#a)"/><text class="lbl" x="118" y="190">HTTPS</text>
+<path class="edge" d="M790 90L790 150" marker-end="url(#a)"/>
+<path class="edge" d="M790 220L790 240L310 320" marker-end="url(#a)"/><text class="lbl" x="560" y="262">/admin*（JWT 付き）</text>
+<path class="edge" d="M310 345L400 345" marker-end="url(#a)"/><text class="lbl" x="318" y="338">fetch</text>
+<path class="edge" d="M490 400L470 450" marker-end="url(#a)"/>
+<path class="edge" d="M580 400L610 450" marker-end="url(#a)"/>
+<path class="edge" d="M670 355L740 355" marker-end="url(#a)"/>
+<path class="edge" d="M175 450L175 400" marker-end="url(#a)" stroke-dasharray="4 3"/>
+<path class="edge" d="M310 490L400 490" marker-end="url(#a)" stroke-dasharray="4 3"/><text class="lbl" x="320" y="482">SQL</text>
+</svg></div>
+<ul class="points">
+<li>ブラウザは 管理用トークンを持たず、Frontend Worker がサーバー側から API を呼びます。</li>
+<li>守りは 2 重です。Access が入口で止め、Frontend Worker も JWT の署名・<code>aud</code>・<code>iss</code>・期限・<code>email</code> を検証します。</li>
+<li>Import tools は SQL ファイルを作って D1 に流し込みます（実行時の経路ではありません）。</li>
+</ul>
+
+<!-- ===== Level 3: API ===== -->
+<h2 class="section-label" id="l3"><span lang="en">Level 3</span> · Component — API Worker</h2>
+<p class="note"><code>backend/src/</code> の構成。</p>
+<div class="diagram">
+<svg viewBox="0 0 900 380" role="img" aria-label="API Worker の Component 図">
+<rect class="ext" x="20" y="20" width="170" height="70" rx="8"/><text class="t" x="105" y="50" text-anchor="middle">Frontend Worker</text><text class="d" x="105" y="70" text-anchor="middle">HTTP / JSON</text>
+<rect class="bound" x="220" y="20" width="660" height="340" rx="10"/><text class="bl" x="236" y="42">API Worker</text>
+<rect class="comp" x="250" y="60" width="200" height="90" rx="8"/><text class="t" x="350" y="88" text-anchor="middle">Router / CORS</text><text class="d" x="350" y="108" text-anchor="middle">lib.rs</text><text class="d" x="350" y="126" text-anchor="middle">経路、CORS、エラー応答</text>
+<rect class="comp" x="500" y="60" width="200" height="90" rx="8"/><text class="t" x="600" y="88" text-anchor="middle">Auth</text><text class="d" x="600" y="108" text-anchor="middle">lib.rs</text><text class="d" x="600" y="126" text-anchor="middle">管理用トークン（Bearer）</text>
+<rect class="comp" x="250" y="190" width="200" height="90" rx="8"/><text class="t" x="350" y="218" text-anchor="middle">Posts handlers</text><text class="d" x="350" y="238" text-anchor="middle">lib.rs</text><text class="d" x="350" y="256" text-anchor="middle">一覧・取得・作成・更新・削除</text>
+<rect class="comp" x="500" y="190" width="200" height="90" rx="8"/><text class="t" x="600" y="218" text-anchor="middle">Image upload</text><text class="d" x="600" y="238" text-anchor="middle">images.rs</text><text class="d" x="600" y="256" text-anchor="middle">検証 → AVIF 変換 → 保存</text>
+<rect class="comp" x="730" y="190" width="130" height="90" rx="8"/><text class="t" x="795" y="218" text-anchor="middle">Utilities</text><text class="d" x="795" y="238" text-anchor="middle">util.rs</text><text class="d" x="795" y="256" text-anchor="middle">slug、時刻</text>
+<rect class="store" x="290" y="305" width="120" height="45" rx="8"/><text class="t" x="350" y="333" text-anchor="middle">D1</text>
+<rect class="store" x="540" y="305" width="120" height="45" rx="8"/><text class="t" x="600" y="333" text-anchor="middle">R2</text>
+<rect class="cont" x="730" y="60" width="130" height="90" rx="8"/><text class="t" x="795" y="100" text-anchor="middle">Images</text><text class="d" x="795" y="120" text-anchor="middle">変換バインディング</text>
+<path class="edge" d="M190 55L250 105" marker-end="url(#a)"/>
+<path class="edge" d="M450 105L500 105" marker-end="url(#a)"/>
+<path class="edge" d="M350 150L350 190" marker-end="url(#a)"/>
+<path class="edge" d="M600 150L600 190" marker-end="url(#a)"/>
+<path class="edge" d="M350 280L350 305" marker-end="url(#a)"/>
+<path class="edge" d="M600 280L600 305" marker-end="url(#a)"/>
+<path class="edge" d="M700 215L730 215" marker-end="url(#a)"/>
+<path class="edge" d="M740 190L770 150" marker-end="url(#a)"/>
+</svg></div>
+
+<!-- ===== Level 3: Frontend ===== -->
+<h2 class="section-label" id="l3b"><span lang="en">Level 3</span> · Component — Frontend Worker</h2>
+<p class="note"><code>frontend/src/</code> の構成。公開側と管理側でクライアントを分け、公開側にトークンを持たせません。</p>
+<div class="diagram">
+<svg viewBox="0 0 900 470" role="img" aria-label="Frontend Worker の Component 図">
+<rect class="bound" x="20" y="20" width="860" height="430" rx="10"/><text class="bl" x="36" y="42">Frontend Worker（Astro SSR）</text>
+<rect class="comp" x="40" y="60" width="240" height="100" rx="8"/><text class="t" x="160" y="88" text-anchor="middle">Middleware</text><text class="d" x="160" y="108" text-anchor="middle">middleware.ts / access.ts</text><text class="d" x="160" y="126" text-anchor="middle">/admin の JWT 検証、同一オリジン確認</text><text class="d" x="160" y="144" text-anchor="middle">/_actions を 404</text>
+<rect class="comp" x="330" y="60" width="240" height="100" rx="8"/><text class="t" x="450" y="88" text-anchor="middle">Public pages</text><text class="d" x="450" y="108" text-anchor="middle">pages/ index, entry, category, page</text><text class="d" x="450" y="126" text-anchor="middle">rss.xml, whoami</text><text class="d" x="450" y="144" text-anchor="middle">共有キャッシュ可</text>
+<rect class="comp" x="620" y="60" width="240" height="100" rx="8"/><text class="t" x="740" y="88" text-anchor="middle">Admin pages</text><text class="d" x="740" y="108" text-anchor="middle">pages/admin/*, AdminEditor</text><text class="d" x="740" y="126" text-anchor="middle">編集・プレビュー・画像 API</text><text class="d" x="740" y="144" text-anchor="middle">no-store, noindex</text>
+<rect class="comp" x="330" y="210" width="240" height="90" rx="8"/><text class="t" x="450" y="238" text-anchor="middle">Public API client</text><text class="d" x="450" y="258" text-anchor="middle">lib/api.ts</text><text class="d" x="450" y="276" text-anchor="middle">トークンなし。公開記事のみ</text>
+<rect class="comp" x="620" y="210" width="240" height="90" rx="8"/><text class="t" x="740" y="238" text-anchor="middle">Admin API client</text><text class="d" x="740" y="258" text-anchor="middle">lib/ の管理用クライアント</text><text class="d" x="740" y="276" text-anchor="middle">管理用トークン付き、下書きも扱う</text>
+<rect class="comp" x="40" y="210" width="240" height="90" rx="8"/><text class="t" x="160" y="238" text-anchor="middle">Markdown renderer</text><text class="d" x="160" y="258" text-anchor="middle">lib/render.ts, ogp.ts</text><text class="d" x="160" y="276" text-anchor="middle">GFM → サニタイズ、ブログカード</text>
+<rect class="comp" x="40" y="340" width="240" height="90" rx="8"/><text class="t" x="160" y="368" text-anchor="middle">Look &amp; feel</text><text class="d" x="160" y="388" text-anchor="middle">tintwork トークン、Layout</text><text class="d" x="160" y="406" text-anchor="middle">Starfield、Ghost、テーマ切替</text>
+<rect class="cont" x="400" y="360" width="200" height="70" rx="8"/><text class="t" x="500" y="390" text-anchor="middle">API Worker</text><text class="d" x="500" y="410" text-anchor="middle">[Container]</text>
+<path class="edge" d="M450 160L450 210" marker-end="url(#a)"/>
+<path class="edge" d="M740 160L740 210" marker-end="url(#a)"/>
+<path class="edge" d="M390 160L220 210" marker-end="url(#a)"/>
+<path class="edge" d="M450 300L470 360" marker-end="url(#a)"/>
+<path class="edge" d="M740 300L580 360" marker-end="url(#a)"/>
+<path class="edge" d="M280 110L330 110" marker-end="url(#a)"/>
+</svg></div>
+
+<!-- ===== Flow ===== -->
+<h2 class="section-label" id="flow"><span lang="en">Dynamic</span> · 投稿・公開の流れ</h2>
+<ul class="points">
+<li><b>読む:</b> ブラウザ → Frontend Worker →（<code>fetch</code>）→ API Worker → D1。Markdown を HTML にして返し、公開ページは共有キャッシュされます。</li>
+<li><b>書く:</b> 管理者 → Cloudflare Access（Google ログイン）→ Frontend Worker が JWT を検証 → 管理用トークン付きで API を呼ぶ → D1 に保存。</li>
+<li><b>画像:</b> 管理画面から送信 → API が Images で AVIF に変換 → R2 に保存し、公開 URL を返します。</li>
+<li><b>移行:</b> はてなブログのバックアップ（Markdown）→ <code>tools/import-hatena.ts</code> が SQL を生成 → D1 に投入します。</li>
+<li><b>デプロイ:</b> main の CI 成功後、GitHub Actions が D1 マイグレーション → API → Frontend の順に <code>wrangler deploy</code> します。</li>
+</ul>
+<p class="note">詳細は <a href="https://github.com/Asuforce/arki/blob/main/docs/architecture.md">docs/architecture.md</a> を参照してください。</p>
+</Layout>
+
+<style>
+
+  .lead, .note { color: var(--text-soft); margin: 0.5rem 0 1rem; }
+  h2.section-label { margin-top: 3rem; }
+  h2.section-label span { color: var(--accent-text); }
+  .toc { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0; }
+  .toc a { border: 1px solid var(--rule); border-radius: 999px; padding: 0.1rem 0.8rem; font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-soft); text-decoration: none; }
+  .toc a:hover { color: var(--accent-text); border-color: var(--accent); }
+  .legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; font-size: 0.85rem; color: var(--text-soft); margin: 0.75rem 0; }
+  .legend i { display: inline-block; width: 0.9em; height: 0.9em; border-radius: 3px; margin-right: 0.4em; vertical-align: -0.1em; border: 1.5px solid; }
+  .diagram { border: 1px solid var(--rule); border-radius: 8px; padding: 8px; overflow-x: auto; margin-top: 1rem; }
+  .diagram svg { display: block; width: 100%; min-width: 640px; height: auto; }
+  .diagram text { font-family: var(--sans, inherit); fill: var(--text); }
+  .diagram .t { font-size: 14px; font-weight: 700; }
+  .diagram .d { font-size: 11.5px; fill: var(--text-soft); }
+  .diagram .k { font-size: 10.5px; fill: var(--muted); font-family: var(--mono); }
+  .diagram .lbl { font-size: 11.5px; fill: var(--text-soft); }
+  .diagram .bl { font-size: 11px; font-family: var(--mono); letter-spacing: 0.12em; fill: var(--muted); text-transform: uppercase; }
+  .diagram .edge { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+  .diagram .bound { fill: none; stroke: var(--rule); stroke-width: 1.5; stroke-dasharray: 6 4; }
+  .person, .system, .ext, .cont, .store, .comp { stroke-width: 1.5; }
+  .system { --c: var(--accent); fill: color-mix(in srgb, var(--accent) 28%, transparent); stroke: var(--accent); }
+  .person { fill: color-mix(in srgb, var(--accent) 12%, transparent); stroke: var(--accent); }
+  .ext { fill: color-mix(in srgb, var(--muted) 14%, transparent); stroke: var(--muted); }
+  .cont { fill: color-mix(in srgb, var(--accent) 16%, transparent); stroke: var(--accent-text); }
+  .store { fill: color-mix(in srgb, var(--text) 8%, transparent); stroke: var(--text-soft); }
+  .comp { fill: transparent; stroke: var(--accent-text); }
+  .legend i.system { background: color-mix(in srgb, var(--accent) 28%, transparent); border-color: var(--accent); }
+  .legend i.ext { background: color-mix(in srgb, var(--muted) 14%, transparent); border-color: var(--muted); }
+  .legend i.cont { background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: var(--accent-text); }
+  .legend i.store { background: color-mix(in srgb, var(--text) 8%, transparent); border-color: var(--text-soft); }
+  .legend i.comp { background: transparent; border-color: var(--accent-text); }
+  .legend .person { background: color-mix(in srgb, var(--accent) 12%, transparent); border-color: var(--accent); }
+  .points { list-style: disc; color: var(--text-soft); padding-left: 1.2rem; }
+  .points li { margin-bottom: 0.4rem; }
+</style>
