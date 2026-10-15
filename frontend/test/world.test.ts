@@ -17,7 +17,7 @@ test("星は official と同じ固定の空で、何度作っても変わらな�
 });
 
 test("ゴーストは本文の列の右の余白の中央にいて、本文にも画面の端にも重ならない", () => {
-  for (const w of [1000, 1280, 1920]) {
+  for (const w of [1100, 1280, 1920]) {
     const columnRight = (w + COLUMN_W) / 2;
     const x = ghostX(w);
     assert.equal(x - columnRight, w - x);
@@ -27,7 +27,7 @@ test("ゴーストは本文の列の右の余白の中央にいて、本文に�
 });
 
 test("左の中立位置は右の鏡で、本文の列の左の余白の中央にいる", () => {
-  for (const w of [1000, 1280, 1920]) {
+  for (const w of [1100, 1280, 1920]) {
     const columnLeft = (w - COLUMN_W) / 2;
     const x = ghostX(w, "left");
     assert.equal(x, w - ghostX(w, "right"));

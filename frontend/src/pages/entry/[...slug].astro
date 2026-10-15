@@ -13,6 +13,7 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
 ---
 
 <Layout title={post.title} description={post.excerpt}>
+  <div class="read-progress" aria-hidden="true"></div>
   <article class="post">
     <header>
       <h1>{post.title}</h1>
@@ -30,5 +31,22 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
       </p>
     </header>
     <div class="post-body" set:html={html} />
+    <footer class="post-end">
+      <span aria-hidden="true">◦</span>
+      <a href="/" lang="en">← All entries</a>
+    </footer>
   </article>
 </Layout>
+
+<script>
+  const bar = document.querySelector<HTMLElement>(".read-progress");
+  if (bar) {
+    const update = (): void => {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      bar.style.setProperty("--p", String(max > 0 ? Math.min(1, window.scrollY / max) : 0));
+    };
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+  }
+</script>
