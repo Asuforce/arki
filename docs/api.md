@@ -14,9 +14,10 @@ Workers の API です。応答は JSON で、エラーは `{"error": "メッセ
 
 | メソッド | パス | 認証 | 内容 |
 |---|---|---|---|
-| GET | `/api/posts` | - | 一覧（本文なし）。`?page=1&limit=20&category=名前`、`limit` は最大 50。認証つきなら `status=draft\|published` と、タイトルの部分一致 `q=` も使える（認証なしでは無視する） |
+| GET | `/api/posts` | - | 一覧（本文なし）。`?page=1&limit=20&category=名前&month=2019-11`（`month` は JST の年月）、`limit` は最大 50。認証つきなら `status=draft\|published` と、タイトルの部分一致 `q=` も使える（認証なしでは無視する） |
 | GET | `/api/posts/by-slug/<slug>` | - | 記事 1 件（本文とカテゴリ付き）。無ければ 404 |
 | GET | `/api/categories` | - | カテゴリと公開記事の数（認証つきなら下書きも数える） |
+| GET | `/api/archive` | - | 月ごと（JST）の公開記事の数 `{"months": [{"month": "2019-11", "count": 3}]}`、新しい月から（認証つきなら下書きも数える） |
 | GET | `/api/posts/:id` | 要 | id で記事 1 件（編集用） |
 | POST | `/api/posts` | 要 | 作成。201 で `{ "id", "slug" }` |
 | PUT | `/api/posts/:id` | 要 | 更新。200 で `{ "id", "slug" }` |

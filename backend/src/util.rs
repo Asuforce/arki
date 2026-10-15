@@ -403,6 +403,18 @@ pub fn image_key(now_iso: &str, hash: &str, extension: &str) -> String {
     )
 }
 
+/// 一覧の `month` として使える `YYYY-MM`（月は 01〜12）か。
+pub(crate) fn is_valid_month(s: &str) -> bool {
+    let b = s.as_bytes();
+    b.len() == 7
+        && b[4] == b'-'
+        && b[..4].iter().all(u8::is_ascii_digit)
+        && matches!(
+            &s[5..],
+            "01" | "02" | "03" | "04" | "05" | "06" | "07" | "08" | "09" | "10" | "11" | "12"
+        )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -782,5 +794,19 @@ mod tests {
         assert_eq!(image_extension("image/avif"), Some("avif"));
         assert_eq!(image_extension("image/jpeg"), Some("jpg"));
         assert_eq!(image_extension("image/svg+xml"), None);
+    }
+
+    #[test]
+    fn month_filter_accepts_only_year_month() {
+        assert!(is_valid_month("2019-11"));
+        assert!(is_valid_month("2019-01"));
+        assert!(!is_valid_month("2019-13"));
+        assert!(!is_valid_month("2019-00"));
+        assert!(!is_valid_month("2019-1"));
+        assert!(!is_valid_month("2019/11"));
+        assert!(!is_valid_month("20x9-11"));
+        assert!(!is_valid_month("2019-11-01"));
+        assert!(!is_valid_month("２０１９-１１"));
+        assert!(!is_valid_month(""));
     }
 }

@@ -1,0 +1,43 @@
+---
+import PostList from "../../../components/PostList.astro";
+import Pagination from "../../../components/Pagination.astro";
+import Layout from "../../../layouts/Layout.astro";
+import { listArchive, listPosts } from "../../../lib/api";
+import { parseMonth } from "../../../lib/archive";
+
+const month = parseMonth(Astro.params.year, Astro.params.month);
+if (!month) return new Response("Not Found", { status: 404 });
+const requested = Number(Astro.url.searchParams.get("page") ?? "1");
+const n = Number.isInteger(requested) && requested >= 1 ? requested : 1;
+
+const [{ posts, page, limit, total }, archive] = await Promise.all([
+  listPosts({ page: n, month, limit: 50 }),
+  listArchive().catch(() => []),
+]);
+if (total === 0) return new Response("Not Found", { status: 404 });
+Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
+
+// 記事のある月だけをたどる。archive は新しい月から並ぶので、newer が前、older が後ろ
+const months = archive.map((a) => a.month);
+const at = months.indexOf(month);
+const newer = at > 0 ? months[at - 1] : null;
+const older = at >= 0 && at < months.length - 1 ? months[at + 1] : null;
+const href = (ym: string): string => `/archive/${ym.slice(0, 4)}/${Number(ym.slice(5))}`;
+const [y, m] = month.split("-");
+const label = `${y}年${Number(m)}月`;
+---
+
+<Layout title={label}>
+  <p class="kicker" lang="en"><a href="/archive">Archive</a></p>
+  <h1 class="page-title">{label}</h1>
+  <PostList posts={posts} />
+  <Pagination page={page} limit={limit} total={total} basePath={`/archive/${y}/${Number(m)}`} />
+  {
+    (newer || older) && (
+      <nav class="month-nav" aria-label="Month">
+        {newer ? <a rel="prev" href={href(newer)}>← {newer.slice(0, 4)}年{Number(newer.slice(5))}月</a> : <span />}
+        {older ? <a rel="next" href={href(older)}>{older.slice(0, 4)}年{Number(older.slice(5))}月 →</a> : <span />}
+      </nav>
+    )
+  }
+</Layout>

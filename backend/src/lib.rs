@@ -4,8 +4,8 @@ mod util;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use util::{
-    constant_time_eq, epoch_to_iso, first_image_url, is_valid_slug, iso_to_epoch, like_pattern,
-    make_excerpt, slug_from_published_at,
+    constant_time_eq, epoch_to_iso, first_image_url, is_valid_month, is_valid_slug, iso_to_epoch,
+    like_pattern, make_excerpt, slug_from_published_at,
 };
 use worker::wasm_bindgen::JsValue;
 use worker::*;
@@ -284,6 +284,13 @@ fn status_filter(req: &Request, is_admin: bool) -> Result<String> {
     )
 }
 
+/// 一覧の `month`（`YYYY-MM`、JST）。形が違えば無視する。
+fn month_filter(req: &Request) -> Result<String> {
+    let month = query_param(req, "month")?.unwrap_or_default();
+    let valid = is_valid_month(&month);
+    Ok(if valid { month } else { String::new() })
+}
+
 async fn list_posts(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let include_drafts = is_admin(&req, &ctx.env);
     let page = query_param(&req, "page")?
@@ -296,6 +303,7 @@ async fn list_posts(req: Request, ctx: RouteContext<()>) -> Result<Response> {
         .clamp(1, MAX_LIMIT);
     let category = query_param(&req, "category")?.unwrap_or_default();
     let status = status_filter(&req, include_drafts)?;
+    let month = month_filter(&req)?;
     let title_query = if include_drafts {
         query_param(&req, "q")?
             .unwrap_or_default()
@@ -313,7 +321,8 @@ async fn list_posts(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let filter = "(? = 1 OR p.status = 'published') AND (? = '' OR p.status = ?) \
                   AND (? = '' OR p.title LIKE ? ESCAPE '\\') AND (? = '' OR p.id IN \
                   (SELECT pc.post_id FROM post_categories pc \
-                   JOIN categories c ON c.id = pc.category_id WHERE c.name = ?))";
+                   JOIN categories c ON c.id = pc.category_id WHERE c.name = ?)) \
+                  AND (? = '' OR strftime('%Y-%m', p.published_at, '+9 hours') = ?)";
     let filter_binds = vec![
         num(include_drafts as i64),
         text(&status),
@@ -322,6 +331,8 @@ async fn list_posts(req: Request, ctx: RouteContext<()>) -> Result<Response> {
         text(&title_pattern),
         text(&category),
         text(&category),
+        text(&month),
+        text(&month),
     ];
     let d1 = ctx.env.d1("DB")?;
 
@@ -447,6 +458,27 @@ async fn list_categories(req: Request, ctx: RouteContext<()>) -> Result<Response
         .await?
         .results()?;
     Response::from_json(&json!({ "categories": categories }))
+}
+
+/// 月ごと（JST）の記事の数。新しい月から並べる。
+async fn list_archive(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    #[derive(Serialize, Deserialize)]
+    struct MonthCount {
+        month: String,
+        count: i64,
+    }
+    let d1 = ctx.env.d1("DB")?;
+    let months: Vec<MonthCount> = d1
+        .prepare(
+            "SELECT strftime('%Y-%m', p.published_at, '+9 hours') AS month, COUNT(*) AS count \
+             FROM posts p WHERE (? = 1 OR p.status = 'published') \
+             GROUP BY month ORDER BY month DESC",
+        )
+        .bind(&[num(is_admin(&req, &ctx.env) as i64)])?
+        .all()
+        .await?
+        .results()?;
+    Response::from_json(&json!({ "months": months }))
 }
 
 /// `base` が空いていればそれを、使われていれば `base_1`、`base_2` … を返す。`exclude_id` の記事自身は衝突とみなさない。
@@ -762,6 +794,7 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
         .get_async("/api/posts/by-slug/*slug", get_post_by_slug)
         .get_async("/api/posts/:id", get_post_by_id)
         .get_async("/api/categories", list_categories)
+        .get_async("/api/archive", list_archive)
         .post_async("/api/posts", create_post)
         .put_async("/api/posts/:id", update_post)
         .delete_async("/api/posts/:id", delete_post)

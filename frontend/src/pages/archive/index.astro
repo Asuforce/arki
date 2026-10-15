@@ -1,0 +1,43 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { listArchive } from "../../lib/api";
+import { groupByYear } from "../../lib/archive";
+
+const years = groupByYear(await listArchive());
+Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
+---
+
+<Layout title="Archive">
+  <p class="kicker" lang="en">Browse by</p>
+  <h1 class="page-title" lang="en">Archive</h1>
+  {
+    years.length === 0 && <p class="empty">まだ記事がありません。</p>
+  }
+  {
+    years.map((y) => (
+      <section class="archive-year">
+        <h2 lang="en">
+          {y.year}
+          <span class="count">{y.total}</span>
+        </h2>
+        <ol class="archive-months">
+          {y.months.map((count, i) => {
+            const m = i + 1;
+            return count > 0 ? (
+              <li>
+                <a href={`/archive/${y.year}/${m}`}>
+                  <span class="m">{m}月</span>
+                  <span class="count">{count}</span>
+                </a>
+              </li>
+            ) : (
+              <li class="none">
+                <span class="m">{m}月</span>
+              </li>
+            );
+          })}
+        </ol>
+      </section>
+    ))
+  }
+</Layout>
