@@ -1,60 +1,20 @@
-<!doctype html>
-<html lang="ja">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Architecture | arki</title>
-<meta name="description" content="arki のシステム構成を C4 モデル（Context / Container / Component）で示した図">
-<style>
-:root{--bg:#f5f4f0;--text:#1a1a1a;--soft:#555;--rule:#d8d6cf;--person:#08427b;--system:#1168bd;--ext:#6b6b6b;--cont:#438dd5;--comp:#85bbf0;--store:#2b7a5a;--onfill:#fff;--oncomp:#06223d;--accent:#1168bd;--card:#fff}
-@media (prefers-color-scheme:dark){:root{--bg:#000;--text:#eee;--soft:#aaa;--rule:#2c2c2c;--person:#0b5aa8;--system:#1168bd;--ext:#555;--cont:#2f6fab;--comp:#a9cdf2;--store:#2b7a5a;--accent:#7db4ee;--card:#0d0d0d}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font:16px/1.7 system-ui,"Hiragino Sans","Noto Sans JP",sans-serif}
-.wrap{max-width:980px;margin:0 auto;padding:0 16px}
-header{border-bottom:1px solid var(--rule)}
-header .wrap{display:flex;justify-content:space-between;align-items:center;min-height:56px}
-header a{color:var(--text);text-decoration:none;font-weight:700;letter-spacing:.02em;text-transform:uppercase}
-header a.back{font-weight:400;font-size:.875rem;color:var(--soft)}
-h1{font-size:clamp(1.8rem,5vw,2.8rem);margin:2rem 0 .5rem;line-height:1.2}
-h2{font-size:1.3rem;margin:3rem 0 .25rem;padding-bottom:.5rem;border-bottom:1px solid var(--rule)}
-h2 small{font-family:ui-monospace,monospace;font-size:.75rem;letter-spacing:.12em;color:var(--accent);display:block;text-transform:uppercase}
-p.lead,p.note{color:var(--soft);margin:.5rem 0 1rem}
-nav.toc{display:flex;flex-wrap:wrap;gap:.5rem;margin:1rem 0}
-nav.toc a{border:1px solid var(--rule);border-radius:999px;padding:.15rem .8rem;font-size:.85rem;color:var(--accent);text-decoration:none}
-.diagram{background:var(--card);border:1px solid var(--rule);border-radius:8px;padding:8px;overflow-x:auto}
-.diagram svg{display:block;width:100%;min-width:640px;height:auto}
-svg text{font-family:system-ui,"Hiragino Sans","Noto Sans JP",sans-serif;fill:var(--onfill)}
-svg .t{font-size:14px;font-weight:700}
-svg .d{font-size:11.5px;opacity:.92}
-svg .k{font-size:10.5px;opacity:.8;font-style:italic}
-svg .lbl{fill:var(--text);font-size:11.5px}
-svg .bg{fill:var(--bg)}
-svg .edge{stroke:var(--soft);stroke-width:1.5;fill:none}
-svg .bound{fill:none;stroke:var(--soft);stroke-width:1.2;stroke-dasharray:6 4}
-svg .bl{fill:var(--soft);font-size:12px;font-weight:700}
-.person{fill:var(--person)}.system{fill:var(--system)}.ext{fill:var(--ext)}.cont{fill:var(--cont)}.store{fill:var(--store)}
-.comp{fill:var(--comp)}svg .oncomp text,svg text.oncomp{fill:var(--oncomp)}
-.legend{display:flex;flex-wrap:wrap;gap:.4rem 1.2rem;font-size:.85rem;color:var(--soft);margin:.75rem 0}
-.legend i{display:inline-block;width:.9em;height:.9em;border-radius:3px;margin-right:.4em;vertical-align:-.1em}
-ul.points{color:var(--soft);padding-left:1.2rem}
-footer{border-top:1px solid var(--rule);margin-top:3rem;padding:1.5rem 0;color:var(--soft);font-size:.85rem}
-a{color:var(--accent)}
-</style>
-</head>
-<body>
-<header><div class="wrap"><a href="/">arki</a><a class="back" href="/">← Blog</a></div></header>
-<main class="wrap">
-<h1>Architecture</h1>
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout title="Architecture" description="arki のシステム構成を C4 モデルで示した図">
+<p class="kicker" lang="en">C4 model</p>
+<h1 class="page-title" lang="en">Architecture</h1>
 <p class="lead">arki は Cloudflare 上で動くブログエンジンです。システムの構成を <a href="https://c4model.com/" rel="noopener noreferrer">C4 モデル</a>の 3 つの階層（Context → Container → Component）で示します。</p>
-<nav class="toc"><a href="#l1">1. System Context</a><a href="#l2">2. Container</a><a href="#l3">3. Component（API）</a><a href="#l3b">3. Component（Frontend）</a><a href="#flow">投稿・公開の流れ</a></nav>
-<div class="legend"><span><i style="background:var(--person)"></i>人</span><span><i style="background:var(--system)"></i>arki（対象システム）</span><span><i style="background:var(--ext)"></i>外部システム</span><span><i style="background:var(--cont)"></i>コンテナ</span><span><i style="background:var(--store)"></i>データストア</span><span><i style="background:var(--comp)"></i>コンポーネント</span></div>
+<nav class="toc" lang="en"><a href="#l1">1. System Context</a><a href="#l2">2. Container</a><a href="#l3">3. Component（API）</a><a href="#l3b">3. Component（Frontend）</a><a href="#flow">投稿・公開の流れ</a></nav>
+<div class="legend"><span><i class="person"></i>人</span><span><i class="system"></i>arki（対象システム）</span><span><i class="ext"></i>外部システム</span><span><i class="cont"></i>コンテナ</span><span><i class="store"></i>データストア</span><span><i class="comp"></i>コンポーネント</span></div>
 
 <!-- ===== Level 1 ===== -->
-<h2 id="l1"><small>Level 1</small>System Context</h2>
+<h2 class="section-label" id="l1"><span lang="en">Level 1</span> · System Context</h2>
 <p class="note">arki を使う人と、arki がやり取りする外部システム。</p>
 <div class="diagram">
 <svg viewBox="0 0 900 460" role="img" aria-label="System Context 図">
-<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--soft)"/></marker></defs>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>
 <rect class="person" x="60" y="30" width="220" height="90" rx="8"/><text class="t" x="170" y="62" text-anchor="middle">読者</text><text class="k" x="170" y="80" text-anchor="middle">[Person]</text><text class="d" x="170" y="100" text-anchor="middle">記事を読む（誰でも）</text>
 <rect class="person" x="620" y="30" width="220" height="90" rx="8"/><text class="t" x="730" y="62" text-anchor="middle">管理者（ブログの著者）</text><text class="k" x="730" y="80" text-anchor="middle">[Person]</text><text class="d" x="730" y="100" text-anchor="middle">記事を書く・画像を上げる</text>
 <rect class="system" x="290" y="190" width="320" height="110" rx="8"/><text class="t" x="450" y="232" text-anchor="middle">arki</text><text class="k" x="450" y="250" text-anchor="middle">[Software System]</text><text class="d" x="450" y="272" text-anchor="middle">記事の表示と投稿ができるブログエンジン</text>
@@ -69,7 +29,7 @@ a{color:var(--accent)}
 </svg></div>
 
 <!-- ===== Level 2 ===== -->
-<h2 id="l2"><small>Level 2</small>Container</h2>
+<h2 class="section-label" id="l2"><span lang="en">Level 2</span> · Container</h2>
 <p class="note">arki を構成する、デプロイされる単位（Worker）とデータストア。</p>
 <div class="diagram">
 <svg viewBox="0 0 900 560" role="img" aria-label="Container 図">
@@ -100,17 +60,17 @@ a{color:var(--accent)}
 </ul>
 
 <!-- ===== Level 3: API ===== -->
-<h2 id="l3"><small>Level 3</small>Component — API Worker</h2>
+<h2 class="section-label" id="l3"><span lang="en">Level 3</span> · Component — API Worker</h2>
 <p class="note"><code>backend/src/</code> の構成。</p>
 <div class="diagram">
 <svg viewBox="0 0 900 380" role="img" aria-label="API Worker の Component 図">
 <rect class="ext" x="20" y="20" width="170" height="70" rx="8"/><text class="t" x="105" y="50" text-anchor="middle">Frontend Worker</text><text class="d" x="105" y="70" text-anchor="middle">HTTP / JSON</text>
 <rect class="bound" x="220" y="20" width="660" height="340" rx="10"/><text class="bl" x="236" y="42">API Worker</text>
-<rect class="comp" x="250" y="60" width="200" height="90" rx="8"/><text class="t oncomp" x="350" y="88" text-anchor="middle">Router / CORS</text><text class="d oncomp" x="350" y="108" text-anchor="middle">lib.rs</text><text class="d oncomp" x="350" y="126" text-anchor="middle">経路、CORS、エラー応答</text>
-<rect class="comp" x="500" y="60" width="200" height="90" rx="8"/><text class="t oncomp" x="600" y="88" text-anchor="middle">Auth</text><text class="d oncomp" x="600" y="108" text-anchor="middle">lib.rs</text><text class="d oncomp" x="600" y="126" text-anchor="middle">Bearer ADMIN_TOKEN</text>
-<rect class="comp" x="250" y="190" width="200" height="90" rx="8"/><text class="t oncomp" x="350" y="218" text-anchor="middle">Posts handlers</text><text class="d oncomp" x="350" y="238" text-anchor="middle">lib.rs</text><text class="d oncomp" x="350" y="256" text-anchor="middle">一覧・取得・作成・更新・削除</text>
-<rect class="comp" x="500" y="190" width="200" height="90" rx="8"/><text class="t oncomp" x="600" y="218" text-anchor="middle">Image upload</text><text class="d oncomp" x="600" y="238" text-anchor="middle">images.rs</text><text class="d oncomp" x="600" y="256" text-anchor="middle">検証 → AVIF 変換 → 保存</text>
-<rect class="comp" x="730" y="190" width="130" height="90" rx="8"/><text class="t oncomp" x="795" y="218" text-anchor="middle">Utilities</text><text class="d oncomp" x="795" y="238" text-anchor="middle">util.rs</text><text class="d oncomp" x="795" y="256" text-anchor="middle">slug、時刻</text>
+<rect class="comp" x="250" y="60" width="200" height="90" rx="8"/><text class="t" x="350" y="88" text-anchor="middle">Router / CORS</text><text class="d" x="350" y="108" text-anchor="middle">lib.rs</text><text class="d" x="350" y="126" text-anchor="middle">経路、CORS、エラー応答</text>
+<rect class="comp" x="500" y="60" width="200" height="90" rx="8"/><text class="t" x="600" y="88" text-anchor="middle">Auth</text><text class="d" x="600" y="108" text-anchor="middle">lib.rs</text><text class="d" x="600" y="126" text-anchor="middle">Bearer ADMIN_TOKEN</text>
+<rect class="comp" x="250" y="190" width="200" height="90" rx="8"/><text class="t" x="350" y="218" text-anchor="middle">Posts handlers</text><text class="d" x="350" y="238" text-anchor="middle">lib.rs</text><text class="d" x="350" y="256" text-anchor="middle">一覧・取得・作成・更新・削除</text>
+<rect class="comp" x="500" y="190" width="200" height="90" rx="8"/><text class="t" x="600" y="218" text-anchor="middle">Image upload</text><text class="d" x="600" y="238" text-anchor="middle">images.rs</text><text class="d" x="600" y="256" text-anchor="middle">検証 → AVIF 変換 → 保存</text>
+<rect class="comp" x="730" y="190" width="130" height="90" rx="8"/><text class="t" x="795" y="218" text-anchor="middle">Utilities</text><text class="d" x="795" y="238" text-anchor="middle">util.rs</text><text class="d" x="795" y="256" text-anchor="middle">slug、時刻</text>
 <rect class="store" x="290" y="305" width="120" height="45" rx="8"/><text class="t" x="350" y="333" text-anchor="middle">D1</text>
 <rect class="store" x="540" y="305" width="120" height="45" rx="8"/><text class="t" x="600" y="333" text-anchor="middle">R2</text>
 <rect class="cont" x="730" y="60" width="130" height="90" rx="8"/><text class="t" x="795" y="100" text-anchor="middle">Images</text><text class="d" x="795" y="120" text-anchor="middle">変換バインディング</text>
@@ -125,18 +85,18 @@ a{color:var(--accent)}
 </svg></div>
 
 <!-- ===== Level 3: Frontend ===== -->
-<h2 id="l3b"><small>Level 3</small>Component — Frontend Worker</h2>
+<h2 class="section-label" id="l3b"><span lang="en">Level 3</span> · Component — Frontend Worker</h2>
 <p class="note"><code>frontend/src/</code> の構成。公開側と管理側でクライアントを分け、公開側にトークンを持たせません。</p>
 <div class="diagram">
 <svg viewBox="0 0 900 470" role="img" aria-label="Frontend Worker の Component 図">
 <rect class="bound" x="20" y="20" width="860" height="430" rx="10"/><text class="bl" x="36" y="42">Frontend Worker（Astro SSR）</text>
-<rect class="comp" x="40" y="60" width="240" height="100" rx="8"/><text class="t oncomp" x="160" y="88" text-anchor="middle">Middleware</text><text class="d oncomp" x="160" y="108" text-anchor="middle">middleware.ts / access.ts</text><text class="d oncomp" x="160" y="126" text-anchor="middle">/admin の JWT 検証、同一オリジン確認</text><text class="d oncomp" x="160" y="144" text-anchor="middle">/_actions を 404</text>
-<rect class="comp" x="330" y="60" width="240" height="100" rx="8"/><text class="t oncomp" x="450" y="88" text-anchor="middle">Public pages</text><text class="d oncomp" x="450" y="108" text-anchor="middle">pages/ index, entry, category, page</text><text class="d oncomp" x="450" y="126" text-anchor="middle">rss.xml, whoami</text><text class="d oncomp" x="450" y="144" text-anchor="middle">共有キャッシュ可</text>
-<rect class="comp" x="620" y="60" width="240" height="100" rx="8"/><text class="t oncomp" x="740" y="88" text-anchor="middle">Admin pages</text><text class="d oncomp" x="740" y="108" text-anchor="middle">pages/admin/*, AdminEditor</text><text class="d oncomp" x="740" y="126" text-anchor="middle">編集・プレビュー・画像 API</text><text class="d oncomp" x="740" y="144" text-anchor="middle">no-store, noindex</text>
-<rect class="comp" x="330" y="210" width="240" height="90" rx="8"/><text class="t oncomp" x="450" y="238" text-anchor="middle">Public API client</text><text class="d oncomp" x="450" y="258" text-anchor="middle">lib/api.ts</text><text class="d oncomp" x="450" y="276" text-anchor="middle">トークンなし。公開記事のみ</text>
-<rect class="comp" x="620" y="210" width="240" height="90" rx="8"/><text class="t oncomp" x="740" y="238" text-anchor="middle">Admin API client</text><text class="d oncomp" x="740" y="258" text-anchor="middle">lib/admin-api.ts</text><text class="d oncomp" x="740" y="276" text-anchor="middle">Bearer ADMIN_TOKEN、下書きも扱う</text>
-<rect class="comp" x="40" y="210" width="240" height="90" rx="8"/><text class="t oncomp" x="160" y="238" text-anchor="middle">Markdown renderer</text><text class="d oncomp" x="160" y="258" text-anchor="middle">lib/render.ts, ogp.ts</text><text class="d oncomp" x="160" y="276" text-anchor="middle">GFM → サニタイズ、ブログカード</text>
-<rect class="comp" x="40" y="340" width="240" height="90" rx="8"/><text class="t oncomp" x="160" y="368" text-anchor="middle">Look &amp; feel</text><text class="d oncomp" x="160" y="388" text-anchor="middle">tintwork トークン、Layout</text><text class="d oncomp" x="160" y="406" text-anchor="middle">Starfield、Ghost、テーマ切替</text>
+<rect class="comp" x="40" y="60" width="240" height="100" rx="8"/><text class="t" x="160" y="88" text-anchor="middle">Middleware</text><text class="d" x="160" y="108" text-anchor="middle">middleware.ts / access.ts</text><text class="d" x="160" y="126" text-anchor="middle">/admin の JWT 検証、同一オリジン確認</text><text class="d" x="160" y="144" text-anchor="middle">/_actions を 404</text>
+<rect class="comp" x="330" y="60" width="240" height="100" rx="8"/><text class="t" x="450" y="88" text-anchor="middle">Public pages</text><text class="d" x="450" y="108" text-anchor="middle">pages/ index, entry, category, page</text><text class="d" x="450" y="126" text-anchor="middle">rss.xml, whoami</text><text class="d" x="450" y="144" text-anchor="middle">共有キャッシュ可</text>
+<rect class="comp" x="620" y="60" width="240" height="100" rx="8"/><text class="t" x="740" y="88" text-anchor="middle">Admin pages</text><text class="d" x="740" y="108" text-anchor="middle">pages/admin/*, AdminEditor</text><text class="d" x="740" y="126" text-anchor="middle">編集・プレビュー・画像 API</text><text class="d" x="740" y="144" text-anchor="middle">no-store, noindex</text>
+<rect class="comp" x="330" y="210" width="240" height="90" rx="8"/><text class="t" x="450" y="238" text-anchor="middle">Public API client</text><text class="d" x="450" y="258" text-anchor="middle">lib/api.ts</text><text class="d" x="450" y="276" text-anchor="middle">トークンなし。公開記事のみ</text>
+<rect class="comp" x="620" y="210" width="240" height="90" rx="8"/><text class="t" x="740" y="238" text-anchor="middle">Admin API client</text><text class="d" x="740" y="258" text-anchor="middle">lib/admin-api.ts</text><text class="d" x="740" y="276" text-anchor="middle">Bearer ADMIN_TOKEN、下書きも扱う</text>
+<rect class="comp" x="40" y="210" width="240" height="90" rx="8"/><text class="t" x="160" y="238" text-anchor="middle">Markdown renderer</text><text class="d" x="160" y="258" text-anchor="middle">lib/render.ts, ogp.ts</text><text class="d" x="160" y="276" text-anchor="middle">GFM → サニタイズ、ブログカード</text>
+<rect class="comp" x="40" y="340" width="240" height="90" rx="8"/><text class="t" x="160" y="368" text-anchor="middle">Look &amp; feel</text><text class="d" x="160" y="388" text-anchor="middle">tintwork トークン、Layout</text><text class="d" x="160" y="406" text-anchor="middle">Starfield、Ghost、テーマ切替</text>
 <rect class="cont" x="400" y="360" width="200" height="70" rx="8"/><text class="t" x="500" y="390" text-anchor="middle">API Worker</text><text class="d" x="500" y="410" text-anchor="middle">[Container]</text>
 <path class="edge" d="M450 160L450 210" marker-end="url(#a)"/>
 <path class="edge" d="M740 160L740 210" marker-end="url(#a)"/>
@@ -147,7 +107,7 @@ a{color:var(--accent)}
 </svg></div>
 
 <!-- ===== Flow ===== -->
-<h2 id="flow"><small>Dynamic</small>投稿・公開の流れ</h2>
+<h2 class="section-label" id="flow"><span lang="en">Dynamic</span> · 投稿・公開の流れ</h2>
 <ul class="points">
 <li><b>読む:</b> ブラウザ → Frontend Worker →（<code>fetch</code>）→ API Worker → D1。Markdown を HTML にして返し、公開ページは共有キャッシュされます。</li>
 <li><b>書く:</b> 管理者 → Cloudflare Access（Google ログイン）→ Frontend Worker が JWT を検証 → <code>ADMIN_TOKEN</code> 付きで API を呼ぶ → D1 に保存。</li>
@@ -156,7 +116,41 @@ a{color:var(--accent)}
 <li><b>デプロイ:</b> main の CI 成功後、GitHub Actions が D1 マイグレーション → API → Frontend の順に <code>wrangler deploy</code> します。</li>
 </ul>
 <p class="note">詳細は <a href="https://github.com/Asuforce/arki/blob/main/docs/architecture.md">docs/architecture.md</a> を参照してください。</p>
-</main>
-<footer><div class="wrap"><a href="/">← arki に戻る</a></div></footer>
-</body>
-</html>
+</Layout>
+
+<style>
+
+  .lead, .note { color: var(--text-soft); margin: 0.5rem 0 1rem; }
+  h2.section-label { margin-top: 3rem; }
+  h2.section-label span { color: var(--accent-text); }
+  .toc { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0; }
+  .toc a { border: 1px solid var(--rule); border-radius: 999px; padding: 0.1rem 0.8rem; font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-soft); text-decoration: none; }
+  .toc a:hover { color: var(--accent-text); border-color: var(--accent); }
+  .legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; font-size: 0.85rem; color: var(--text-soft); margin: 0.75rem 0; }
+  .legend i { display: inline-block; width: 0.9em; height: 0.9em; border-radius: 3px; margin-right: 0.4em; vertical-align: -0.1em; border: 1.5px solid; }
+  .diagram { border: 1px solid var(--rule); border-radius: 8px; padding: 8px; overflow-x: auto; margin-top: 1rem; }
+  .diagram svg { display: block; width: 100%; min-width: 640px; height: auto; }
+  .diagram text { font-family: var(--sans, inherit); fill: var(--text); }
+  .diagram .t { font-size: 14px; font-weight: 700; }
+  .diagram .d { font-size: 11.5px; fill: var(--text-soft); }
+  .diagram .k { font-size: 10.5px; fill: var(--muted); font-family: var(--mono); }
+  .diagram .lbl { font-size: 11.5px; fill: var(--text-soft); }
+  .diagram .bl { font-size: 11px; font-family: var(--mono); letter-spacing: 0.12em; fill: var(--muted); text-transform: uppercase; }
+  .diagram .edge { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+  .diagram .bound { fill: none; stroke: var(--rule); stroke-width: 1.5; stroke-dasharray: 6 4; }
+  .person, .system, .ext, .cont, .store, .comp { stroke-width: 1.5; }
+  .system { --c: var(--accent); fill: color-mix(in srgb, var(--accent) 28%, transparent); stroke: var(--accent); }
+  .person { fill: color-mix(in srgb, var(--accent) 12%, transparent); stroke: var(--accent); }
+  .ext { fill: color-mix(in srgb, var(--muted) 14%, transparent); stroke: var(--muted); }
+  .cont { fill: color-mix(in srgb, var(--accent) 16%, transparent); stroke: var(--accent-text); }
+  .store { fill: color-mix(in srgb, var(--text) 8%, transparent); stroke: var(--text-soft); }
+  .comp { fill: transparent; stroke: var(--accent-text); }
+  .legend i.system { background: color-mix(in srgb, var(--accent) 28%, transparent); border-color: var(--accent); }
+  .legend i.ext { background: color-mix(in srgb, var(--muted) 14%, transparent); border-color: var(--muted); }
+  .legend i.cont { background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: var(--accent-text); }
+  .legend i.store { background: color-mix(in srgb, var(--text) 8%, transparent); border-color: var(--text-soft); }
+  .legend i.comp { background: transparent; border-color: var(--accent-text); }
+  .legend .person { background: color-mix(in srgb, var(--accent) 12%, transparent); border-color: var(--accent); }
+  .points { list-style: disc; color: var(--text-soft); padding-left: 1.2rem; }
+  .points li { margin-bottom: 0.4rem; }
+</style>
