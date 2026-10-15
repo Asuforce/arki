@@ -7,7 +7,8 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
 ---
 
 <Layout title="Category">
-  <h1>Category</h1>
+  <p class="kicker" lang="en">Browse by</p>
+  <h1 class="page-title" lang="en">Category</h1>
   <ul class="category-list">
     {
       categories.map((c) => (

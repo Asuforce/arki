@@ -3,12 +3,29 @@ import PostList from "../components/PostList.astro";
 import Pagination from "../components/Pagination.astro";
 import Layout from "../layouts/Layout.astro";
 import { listPosts } from "../lib/api";
+import { authorName, formatDate } from "../lib/site";
 
 const { posts, page, limit, total } = await listPosts({ page: 1 });
 Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
 ---
 
-<Layout>
-  <PostList posts={posts} />
+<Layout description="日常を忘れるな。毎日の小さなことを、忘れないために書いているブログ。">
+  <section class="hero">
+    <p class="kicker" lang="en">Weblog by {authorName}</p>
+    <h1 class="hero-title">日常を<br /><span class="outline">忘れるな</span></h1>
+    <p class="hero-sub">
+      天気と、食べたものと、少しだけ考えたこと。毎日の小さなことを、忘れないために書いています。
+    </p>
+    {
+      posts[0] && (
+        <p class="hero-stat" lang="en">
+          <span>{total} entries</span>
+          <span>Latest {formatDate(posts[0].published_at)}</span>
+        </p>
+      )
+    }
+  </section>
+  <h2 class="section-label" lang="en">Latest</h2>
+  <PostList posts={posts} feature={page === 1} />
   <Pagination page={page} limit={limit} total={total} basePath="/" />
 </Layout>

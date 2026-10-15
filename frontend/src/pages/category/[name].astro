@@ -14,7 +14,8 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
 ---
 
 <Layout title={name}>
-  <h1>{name}</h1>
+  <p class="kicker" lang="en">Category</p>
+  <h1 class="page-title">{name}</h1>
   <PostList posts={posts} />
   <Pagination page={page} limit={limit} total={total} basePath={`/category/${encodeURIComponent(name)}`} />
 </Layout>

@@ -4,8 +4,11 @@ import { formatDate } from "../lib/site";
 
 interface Props {
   posts: PostSummary[];
+  /** 先頭の記事を大きく見せる（トップのみ） */
+  feature?: boolean;
 }
-const { posts } = Astro.props;
+const { posts, feature = false } = Astro.props;
+const yearOf = (iso: string): string => formatDate(iso).slice(0, 4);
 ---
 
 {
@@ -13,12 +16,19 @@ const { posts } = Astro.props;
     <p class="empty">まだ記事がありません。</p>
   ) : (
     <ul class="post-list">
-      {posts.map((post) => (
-        <li class:list={{ "has-thumb": post.thumbnail }}>
+      {posts.flatMap((post, i) => [
+        i > 0 && yearOf(post.published_at) !== yearOf(posts[i - 1].published_at) && (
+          <li class="year-mark" role="presentation" aria-hidden="true">
+            {yearOf(post.published_at)}
+          </li>
+        ),
+        (
+        <li class:list={{ "has-thumb": post.thumbnail, featured: feature && i === 0 }} style={`--i:${i}`}>
           <div class="post-main">
             <time datetime={post.published_at}>{formatDate(post.published_at)}</time>
             <a class="post-title" href={`/entry/${post.slug}`}>
               {post.title}
+              <span class="post-arrow" aria-hidden="true">→</span>
             </a>
             {post.categories.length > 0 && (
               <span class="tags">
@@ -31,7 +41,8 @@ const { posts } = Astro.props;
           </div>
           {post.thumbnail && <img class="thumb" src={post.thumbnail} alt="" loading="lazy" decoding="async" />}
         </li>
-      ))}
+        ),
+      ])}
     </ul>
   )
 }
