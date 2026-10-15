@@ -97,6 +97,9 @@ main > h1 { font-family: var(--display); font-weight: 700; letter-spacing: 0.02e
 .post .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; margin: 0 0 2.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--rule); }
 .post .meta time { margin: 0; }
 .post .meta .tags { margin: 0; }
+.post .meta .edit-link { margin-left: auto; font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-text); text-decoration: none; border: 1px solid var(--accent-text); border-radius: 999px; padding: 0.15rem 0.9rem; transition: color 150ms, border-color 150ms, background 150ms; }
+.post .meta .edit-link:hover { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+.post .meta .edit-link[hidden] { display: none; }
 .read-progress { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 50; background: var(--accent); transform-origin: left; transform: scaleX(var(--p, 0)); pointer-events: none; }
 .post-end { display: flex; align-items: center; justify-content: space-between; margin-top: 4rem; padding-top: 1.5rem; border-top: 1px solid var(--rule); color: var(--muted); font-family: var(--display); font-weight: 700; font-size: 0.875rem; letter-spacing: 0.08em; text-transform: uppercase; }
 .post-end a { color: var(--text-soft); text-decoration: none; }
