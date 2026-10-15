@@ -91,7 +91,7 @@ async function readHead(res: Response): Promise<string> {
     chunks.push(value);
     size += value.length;
     // </head> まで読めれば十分
-    if (/<\/head>/i.test(new TextDecoder("latin1").decode(value))) break;
+    if (/<\/head>/i.test(new TextDecoder("utf-8").decode(value))) break;
   }
   await reader.cancel().catch(() => undefined);
   const all = new Uint8Array(size);

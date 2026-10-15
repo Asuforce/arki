@@ -66,3 +66,9 @@ test("URL だけの段落はブログカードにし、相対リンクは触ら�
   assert.match(renderPost("https://example.com/a?x=1&y=2"), /<a href="https:\/\/example\.com\/a\?x=1&amp;y=2" class="link-card" rel="noopener noreferrer">/);
   assert.doesNotMatch(renderPost("[/entry/2019/01/01/000000](/entry/2019/01/01/000000)"), /link-card/);
 });
+
+test("X の blockquote 埋め込みは class を残し、他の class は落とす", () => {
+  const html = renderPost('<blockquote class="twitter-tweet evil"><p>本文</p>&mdash; a <a href="https://twitter.com/a/status/1">May 1, 2020</a></blockquote>');
+  assert.match(html, /<blockquote class="twitter-tweet">/);
+  assert.doesNotMatch(renderPost('<blockquote class="evil">x</blockquote>'), /class=/);
+});

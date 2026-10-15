@@ -26,6 +26,7 @@ const sanitizeOptions: sanitizeHtml.IOptions = {
     img: ["src", "alt", "title", "width", "height", "loading", "class"],
     iframe: ["src", "width", "height", "title", "allow", "allowfullscreen", "frameborder", "referrerpolicy", "loading"],
     span: ["class"],
+    blockquote: ["class"],
     code: ["class"],
     pre: ["class"],
     td: ["align", "colspan", "rowspan"],
@@ -33,6 +34,8 @@ const sanitizeOptions: sanitizeHtml.IOptions = {
     ol: ["start"],
     li: ["value"],
   },
+  // はてなの WYSIWYG が書く X の埋め込み (<blockquote class="twitter-tweet">) だけ class を残す
+  allowedClasses: { blockquote: ["twitter-tweet"] },
   allowedSchemes: ["http", "https", "mailto"],
   allowedIframeHostnames: IFRAME_HOSTS,
   allowIframeRelativeUrls: false,
