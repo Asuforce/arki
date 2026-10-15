@@ -61,7 +61,8 @@ flowchart LR
 - `iframe` は `www.youtube.com`、`www.youtube-nocookie.com`、`embed.music.apple.com` だけ許可します。
 - 外部リンクには `rel="noopener noreferrer"`、画像には `loading="lazy"` を付けます。
 - 本文に `<!-- toc -->` があれば、`h2` / `h3` の目次に置き換えます。見出しには `h-1` のような id が付きます。
-- `<a class="link-card">` はブログカードとして表示します。
+- `<a class="link-card">` はブログカードとして表示します。表示時に `lib/ogp.ts` がリンク先の OGP (タイトル・説明・画像) を取り、カードにします（3 秒で打ち切り、10 分〜1 時間メモリに覚えます。取れなければ URL だけのリンクのまま。`localhost` や内部アドレスは取りに行きません）。
+- 段落に URL だけを書くと埋め込みになります。YouTube (`watch?v=`、`youtu.be`、`shorts`) は `youtube-nocookie.com` の iframe、X (`twitter.com`、`x.com` の `/status/`) は公式の埋め込み（記事ページが `widgets.js` を読みます）、それ以外はブログカードです。文章の途中の URL や `[名前](URL)` は、ふつうのリンクのままです。
 
 ## 見た目
 

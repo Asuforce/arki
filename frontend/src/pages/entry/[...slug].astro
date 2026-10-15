@@ -1,6 +1,7 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import { getPost } from "../../lib/api";
+import { expandLinkCards } from "../../lib/ogp";
 import { renderPost } from "../../lib/render";
 import { formatDate } from "../../lib/site";
 
@@ -8,7 +9,7 @@ const slug = Astro.params.slug;
 const post = slug ? await getPost(slug) : null;
 if (!post) return new Response("Not Found", { status: 404 });
 
-const html = renderPost(post.content);
+const html = await expandLinkCards(renderPost(post.content));
 Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
 ---
 
@@ -39,6 +40,17 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
 </Layout>
 
 <script>
+  // X の埋め込みがあるときだけ、公式の widgets.js を読む（サイトのテーマに合わせる）
+  const tweets = document.querySelectorAll<HTMLElement>("blockquote.twitter-tweet");
+  if (tweets.length > 0) {
+    const theme = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+    tweets.forEach((t) => t.setAttribute("data-theme", theme));
+    const s = document.createElement("script");
+    s.src = "https://platform.twitter.com/widgets.js";
+    s.async = true;
+    document.body.appendChild(s);
+  }
+
   const bar = document.querySelector<HTMLElement>(".read-progress");
   if (bar) {
     const update = (): void => {
