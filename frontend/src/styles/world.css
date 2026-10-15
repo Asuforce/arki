@@ -42,7 +42,7 @@
   initial-value: 1;
 }
 
-@media (min-width: 1000px) {
+@media (min-width: 1100px) {
   .ghost-float {
     display: block;
     position: fixed;
@@ -63,7 +63,7 @@
   }
 }
 
-@media (max-width: 999.98px) {
+@media (max-width: 1099.98px) {
   .ghost-mark { display: block; }
 }
 

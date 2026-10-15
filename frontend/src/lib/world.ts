@@ -26,8 +26,8 @@ export function makeStars(count: number = STAR_COUNT): Star[] {
   });
 }
 
-export const COLUMN_W = 760;
-export const WIDE_MIN = 1000;
+export const COLUMN_W = 880;
+export const WIDE_MIN = 1100;
 export const GHOST_W = 72;
 export const GHOST_ASPECT = 392 / 439;
 export const NAV_H = 56;

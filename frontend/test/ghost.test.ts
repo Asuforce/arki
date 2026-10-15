@@ -303,12 +303,12 @@ test("可動範囲: 余白から傾いた見かけの幅と隙間を引いた分
   const flat = { x: 0, tilt: 0, scale: 1, gaze: { x: 0, y: 0 } };
   assert.equal(halfExtent(flat), GHOST_W / 2);
   assert.ok(halfExtent({ ...flat, tilt: 9 }) > halfExtent(flat), "傾くと見かけの幅が広がる");
-  assert.equal(xRoom(1000, flat), 60 - 36 - EDGE_GAP);
-  assert.equal(xRoom(1280, flat), 130 - 36 - EDGE_GAP);
-  assert.equal(xRoom(1600, flat), 210 - 36 - EDGE_GAP);
-  assert.ok(xRoom(1000, flat) < xRoom(1280, flat) && xRoom(1280, flat) < xRoom(1600, flat));
+  assert.equal(xRoom(1100, flat), 55 - 36 - EDGE_GAP);
+  assert.equal(xRoom(1280, flat), 100 - 36 - EDGE_GAP);
+  assert.equal(xRoom(1600, flat), 180 - 36 - EDGE_GAP);
+  assert.ok(xRoom(1100, flat) < xRoom(1280, flat) && xRoom(1280, flat) < xRoom(1600, flat));
   assert.equal(xRoom(800, flat), 0, "余白が見かけの幅より狭いなら 0");
-  assert.ok(xRoom(1000, { ...flat, scale: 1.1 }) < xRoom(1000, flat), "大きい姿勢ほど狭い");
+  assert.ok(xRoom(1100, { ...flat, scale: 1.1 }) < xRoom(1100, flat), "大きい姿勢ほど狭い");
 });
 
 test("x の目標は、どの幅、側、ブロック、進み具合でも、傾いた見かけの幅が余白の中に隙間つきで収まる", () => {

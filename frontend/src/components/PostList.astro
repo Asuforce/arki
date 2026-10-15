@@ -23,12 +23,11 @@ const yearOf = (iso: string): string => formatDate(iso).slice(0, 4);
           </li>
         ),
         (
-        <li class:list={{ "has-thumb": post.thumbnail, featured: feature && i === 0 }} style={`--i:${i}`}>
+        <li class:list={{ "has-thumb": post.thumbnail, featured: feature && i === 0 }} style={`--i:${Math.min(i, 6)}`}>
           <time datetime={post.published_at}>{formatDate(post.published_at)}</time>
           <div class="post-main">
             <a class="post-title" href={`/entry/${post.slug}`}>
               {post.title}
-              <span class="post-arrow" aria-hidden="true">→</span>
             </a>
             {post.categories.length > 0 && (
               <span class="tags">

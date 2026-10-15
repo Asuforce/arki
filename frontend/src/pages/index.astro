@@ -12,16 +12,15 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
 
 <Layout>
   <section class="hero">
+    <h1 class="sr-only">{siteTitle}</h1>
     <p class="kicker" lang="en">Weblog by {authorName}</p>
-    <h1 class="hero-title">{siteTitle}</h1>
-    {
-      posts[0] && (
-        <p class="hero-stat" lang="en">
-          <span>{total} entries</span>
-          <span>Latest {formatDate(posts[0].published_at)}</span>
-        </p>
-      )
-    }
+    <p class="hero-count" lang="en">
+      <span class="hero-num">{total}</span>
+      <span class="hero-meta">
+        <span>{total === 1 ? "entry" : "entries"}</span>
+        {posts[0] && <span>Latest {formatDate(posts[0].published_at)}</span>}
+      </span>
+    </p>
   </section>
   {
     topCategories.length > 0 && (
