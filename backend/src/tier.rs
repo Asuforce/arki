@@ -78,14 +78,14 @@ impl Gate {
 
     pub fn knowledge_description(self) -> &'static str {
         match self {
-            Gate::Long => "再利用できる手順や設定を、まとめて記録している",
+            Gate::Long => "調べたことや選んだ理由、自分の考えや意見を、筋道を立てて書いている",
             Gate::Short => "再利用できる手順、設定、エラーの解決、学びがある",
         }
     }
 
     pub fn other_description(self) -> &'static str {
         match self {
-            Gate::Long => "考察、検証、設計の考え、体験を、自分の言葉で掘り下げている",
+            Gate::Long => "出来事、旅、イベント、サービスの紹介を、順を追って書いている",
             Gate::Short => "感想や出来事が中心で、再利用できる知見がない",
         }
     }
