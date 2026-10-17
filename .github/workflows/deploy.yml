@@ -37,6 +37,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: backend
+          # ci の backend job と job 名が同じで、キーを共有すると ci が先に保存した debug の
+          # cache に exact hit して release の成果物が保存されない。deploy 専用に分ける。
+          shared-key: deploy
       - uses: actions/setup-node@v4
         with:
           node-version: 22
