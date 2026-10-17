@@ -366,6 +366,7 @@ async fn list_posts(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let category = query_param(&req, "category")?.unwrap_or_default();
     let status = status_filter(&req, include_drafts)?;
     let month = month_filter(&req)?;
+    let tier = tier::list_filter(&query_param(&req, "tier")?.unwrap_or_default(), include_drafts);
     let search_query: String = query_param(&req, "q")?
         .unwrap_or_default()
         .trim()
@@ -382,7 +383,8 @@ async fn list_posts(req: Request, ctx: RouteContext<()>) -> Result<Response> {
                   AND (? = '' OR p.title LIKE ? ESCAPE '\\' OR p.content LIKE ? ESCAPE '\\') AND (? = '' OR p.id IN \
                   (SELECT pc.post_id FROM post_categories pc \
                    JOIN categories c ON c.id = pc.category_id WHERE c.name = ?)) \
-                  AND (? = '' OR strftime('%Y-%m', p.published_at, '+9 hours') = ?)";
+                  AND (? = '' OR strftime('%Y-%m', p.published_at, '+9 hours') = ?) \
+                  AND (? = '' OR (? = 'none' AND p.tier IS NULL) OR CAST(p.tier AS TEXT) = ?)";
     let filter_binds = vec![
         num(include_drafts as i64),
         text(&status),
@@ -394,6 +396,9 @@ async fn list_posts(req: Request, ctx: RouteContext<()>) -> Result<Response> {
         text(&category),
         text(&month),
         text(&month),
+        text(tier),
+        text(tier),
+        text(tier),
     ];
     let d1 = ctx.env.d1("DB")?;
 

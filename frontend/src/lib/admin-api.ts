@@ -37,7 +37,7 @@ export interface AdminApiConfig {
 
 export interface AdminApi {
   send(method: string, path: string, body?: BodyInit | null, headers?: Record<string, string>): Promise<Response>;
-  listPosts(opts: { page?: number; status?: string; q?: string }): Promise<AdminPostList>;
+  listPosts(opts: { page?: number; status?: string; tier?: string; q?: string }): Promise<AdminPostList>;
   getPost(id: number): Promise<AdminPost | null>;
   categoryNames(): Promise<string[]>;
 }
@@ -63,9 +63,10 @@ export function createAdminApi(config: AdminApiConfig): AdminApi {
 
   return {
     send,
-    async listPosts({ page = 1, status = "", q = "" }) {
+    async listPosts({ page = 1, status = "", tier = "", q = "" }) {
       const query = new URLSearchParams({ page: String(page), limit: "20" });
       if (status) query.set("status", status);
+      if (tier) query.set("tier", tier);
       if (q) query.set("q", q);
       const list = await json<AdminPostList>(`/api/posts?${query}`);
       if (!list) throw new Error("API /api/posts not found");

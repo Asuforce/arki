@@ -22,6 +22,15 @@ test("管理用のクライアントは Bearer を付ける", async () => {
   assert.match(calls[0].url, /status=draft/);
 });
 
+test("管理用のクライアントは tier の絞り込みを一覧のクエリに載せる", async () => {
+  const { calls, fakeFetch } = recorder();
+  const api = createAdminApi({ base: "https://api.example.com", token: "secret", fetch: fakeFetch });
+  await api.listPosts({ tier: "none" });
+  await api.listPosts({});
+  assert.match(calls[0].url, /tier=none/);
+  assert.doesNotMatch(calls[1].url, /tier=/);
+});
+
 test("公開側のコードは管理用のトークンに触れない（送ると下書きが公開側に出る）", () => {
   const root = new URL("../src/", import.meta.url).pathname;
   const publicFiles = [...walk(root)].filter((f) => {

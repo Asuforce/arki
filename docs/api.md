@@ -91,6 +91,8 @@ Workers の API です。応答は JSON で、エラーは `{"error": "メッセ
 
 設計は [tier-scoring](tier-scoring.md) にあります。
 
+`GET /api/posts?tier=1|2|3|none` は、認証つきのときだけ tier で絞り込みます（`none` は未判定）。ほかの値は無視し、認証なしでは `tier` を渡しても絞り込まれません。管理画面の記事一覧には、この絞り込みのタブがあります。
+
 `POST /api/posts/:id/classify` は、記事の長さ（表示される文字）で長さの門を決め、Clef に 2 択を聞いて、結果を返すだけです。下書きにも使えます。
 
 ```json
