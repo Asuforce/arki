@@ -8,7 +8,7 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
 <p class="kicker" lang="en">C4 model</p>
 <h1 class="page-title" lang="en">Architecture</h1>
 <p class="lead">arki は Cloudflare 上で動くブログエンジンです。システムの構成を <a href="https://c4model.com/" rel="noopener noreferrer">C4 モデル</a>の 3 つの階層（Context → Container → Component）で示します。</p>
-<nav class="toc" lang="en"><a href="#l1">1. System Context</a><a href="#l2">2. Container</a><a href="#l3">3. Component（API）</a><a href="#l3b">3. Component（Frontend）</a><a href="#flow">投稿・公開の流れ</a></nav>
+<nav class="toc" lang="en"><a href="#l1">1. System Context</a><a href="#l2">2. Container</a><a href="#l3">3. Component（API）</a><a href="#l3c">3. Component（ティア判定）</a><a href="#l3b">3. Component（Frontend）</a><a href="#flow">投稿・公開の流れ</a></nav>
 <div class="legend"><span><i class="person"></i>人</span><span><i class="system"></i>arki（対象システム）</span><span><i class="ext"></i>外部システム</span><span><i class="cont"></i>コンテナ</span><span><i class="store"></i>データストア</span><span><i class="comp"></i>コンポーネント</span></div>
 
 <!-- ===== Level 1 ===== -->
@@ -26,8 +26,10 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
 <path class="edge" d="M170 120L170 150L350 190" marker-end="url(#a)"/><text class="lbl" x="130" y="150">記事を閲覧</text>
 <path class="edge" d="M730 120L730 160L560 190" marker-end="url(#a)"/><text class="lbl" x="745" y="170">投稿・編集</text>
 <path class="edge" d="M780 350L780 330L600 290" marker-end="url(#a)"/><text class="lbl" x="700" y="335">本人確認（JWT）</text>
-<path class="edge" d="M120 350L120 320L320 295" marker-end="url(#a)"/><text class="lbl" x="30" y="335">取り込み（tools）</text>
+<path class="edge" d="M120 350L120 320L320 295" marker-end="url(#a)"/><text class="lbl" x="30" y="335">取り込み・判定（tools）</text>
 <path class="edge" d="M450 300L450 350" marker-end="url(#a)"/><text class="lbl" x="458" y="332">OGP 取得・埋め込み</text>
+<rect class="ext" x="680" y="200" width="200" height="80" rx="8"/><text class="t" x="780" y="228" text-anchor="middle">Cloudflare Workers AI</text><text class="k" x="780" y="244" text-anchor="middle">[External]</text><text class="d" x="780" y="262" text-anchor="middle">Clef で記事の tier を判定</text>
+<path class="edge" d="M610 240L680 240" marker-end="url(#a)"/><text class="lbl" x="616" y="232">判定</text>
 </svg></div>
 
 <!-- ===== Level 2 ===== -->
@@ -40,11 +42,12 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
 <rect class="ext" x="710" y="150" width="160" height="70" rx="8"/><text class="t" x="790" y="178" text-anchor="middle">Cloudflare Access</text><text class="d" x="790" y="198" text-anchor="middle">/admin* の入口</text>
 <rect class="bound" x="20" y="250" width="860" height="300" rx="10"/><text class="bl" x="36" y="272">arki（Cloudflare）</text>
 <rect class="cont" x="40" y="290" width="270" height="110" rx="8"/><text class="t" x="175" y="318" text-anchor="middle">Frontend Worker</text><text class="k" x="175" y="334" text-anchor="middle">[Astro SSR + 静的ファイル]</text><text class="d" x="175" y="356" text-anchor="middle">公開ページ、RSS、/admin、/whoami</text><text class="d" x="175" y="374" text-anchor="middle">JWT 検証 middleware</text>
-<rect class="cont" x="400" y="290" width="270" height="110" rx="8"/><text class="t" x="535" y="318" text-anchor="middle">API Worker</text><text class="k" x="535" y="334" text-anchor="middle">[Rust / workers-rs]</text><text class="d" x="535" y="356" text-anchor="middle">記事・カテゴリ・画像の JSON API</text><text class="d" x="535" y="374" text-anchor="middle">管理用トークンで書き込み</text>
+<rect class="cont" x="400" y="290" width="270" height="110" rx="8"/><text class="t" x="535" y="318" text-anchor="middle">API Worker</text><text class="k" x="535" y="334" text-anchor="middle">[Rust / workers-rs]</text><text class="d" x="535" y="356" text-anchor="middle">記事・カテゴリ・画像・tier の JSON API</text><text class="d" x="535" y="374" text-anchor="middle">管理用トークンで書き込み</text>
 <rect class="store" x="400" y="450" width="120" height="75" rx="8"/><text class="t" x="460" y="482" text-anchor="middle">D1</text><text class="d" x="460" y="502" text-anchor="middle">記事・カテゴリ</text>
 <rect class="store" x="550" y="450" width="120" height="75" rx="8"/><text class="t" x="610" y="482" text-anchor="middle">R2</text><text class="d" x="610" y="502" text-anchor="middle">画像（AVIF）</text>
 <rect class="cont" x="740" y="320" width="120" height="75" rx="8"/><text class="t" x="800" y="350" text-anchor="middle">Images</text><text class="d" x="800" y="370" text-anchor="middle">AVIF へ変換</text>
-<rect class="cont" x="40" y="450" width="270" height="75" rx="8"/><text class="t" x="175" y="478" text-anchor="middle">Import tools</text><text class="k" x="175" y="494" text-anchor="middle">[TypeScript / CLI]</text><text class="d" x="175" y="512" text-anchor="middle">はてな取り込み、画像移行</text>
+<rect class="cont" x="740" y="430" width="120" height="75" rx="8"/><text class="t" x="800" y="460" text-anchor="middle">Workers AI</text><text class="d" x="800" y="480" text-anchor="middle">Clef で tier を判定</text>
+<rect class="cont" x="40" y="450" width="270" height="75" rx="8"/><text class="t" x="175" y="478" text-anchor="middle">Import tools</text><text class="k" x="175" y="494" text-anchor="middle">[TypeScript / CLI]</text><text class="d" x="175" y="512" text-anchor="middle">はてな取り込み、画像移行、tier の一括判定</text>
 <path class="edge" d="M110 90L110 290" marker-end="url(#a)"/><text class="lbl" x="118" y="190">HTTPS</text>
 <path class="edge" d="M790 90L790 150" marker-end="url(#a)"/>
 <path class="edge" d="M790 220L790 240L310 320" marker-end="url(#a)"/><text class="lbl" x="560" y="262">/admin*（JWT 付き）</text>
@@ -52,18 +55,21 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
 <path class="edge" d="M490 400L470 450" marker-end="url(#a)"/>
 <path class="edge" d="M580 400L610 450" marker-end="url(#a)"/>
 <path class="edge" d="M670 355L740 355" marker-end="url(#a)"/>
+<path class="edge" d="M670 385L760 430" marker-end="url(#a)"/>
 <path class="edge" d="M175 450L175 400" marker-end="url(#a)" stroke-dasharray="4 3"/>
+<path class="edge" d="M310 465L420 400" marker-end="url(#a)" stroke-dasharray="4 3"/><text class="lbl" x="332" y="438">判定</text>
 <path class="edge" d="M310 490L400 490" marker-end="url(#a)" stroke-dasharray="4 3"/><text class="lbl" x="320" y="482">SQL</text>
 </svg></div>
 <ul class="points">
 <li>ブラウザは 管理用トークンを持たず、Frontend Worker がサーバー側から API を呼びます。</li>
 <li>守りは 2 重です。Access が入口で止め、Frontend Worker も JWT の署名・<code>aud</code>・<code>iss</code>・期限・<code>email</code> を検証します。</li>
 <li>Import tools は SQL ファイルを作って D1 に流し込みます（実行時の経路ではありません）。</li>
+<li>Workers AI は API Worker の binding（<code>AI</code>）から呼びます。一括判定のツールは API を HTTPS で呼ぶだけで、Workers AI は直接呼びません。</li>
 </ul>
 
 <!-- ===== Level 3: API ===== -->
 <h2 class="section-label" id="l3"><span lang="en">Level 3</span> · Component — API Worker</h2>
-<p class="note"><code>backend/src/</code> の構成。</p>
+<p class="note"><code>backend/src/</code> の構成。ティア判定の部品は、次の図に分けて示します。</p>
 <div class="diagram">
 <svg viewBox="0 0 900 380" role="img" aria-label="API Worker の Component 図">
 <rect class="ext" x="20" y="20" width="170" height="70" rx="8"/><text class="t" x="105" y="50" text-anchor="middle">Frontend Worker</text><text class="d" x="105" y="70" text-anchor="middle">HTTP / JSON</text>
@@ -86,6 +92,30 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
 <path class="edge" d="M740 190L770 150" marker-end="url(#a)"/>
 </svg></div>
 
+<!-- ===== Level 3: Tier ===== -->
+<h2 class="section-label" id="l3c"><span lang="en">Level 3</span> · Component — ティア判定</h2>
+<p class="note">記事に長文、ナレッジ、日記を付ける部品。判定は返すだけで、書き込みは別の経路です。設計は <a href="https://github.com/Asuforce/arki/blob/main/docs/tier-scoring.md">docs/tier-scoring.md</a> にあります。</p>
+<div class="diagram">
+<svg viewBox="0 0 900 330" role="img" aria-label="ティア判定の Component 図">
+<rect class="cont" x="20" y="40" width="170" height="80" rx="8"/><text class="t" x="105" y="70" text-anchor="middle">classify-tiers.ts</text><text class="k" x="105" y="86" text-anchor="middle">[TypeScript / CLI]</text><text class="d" x="105" y="104" text-anchor="middle">手元で実行</text>
+<rect class="bound" x="220" y="20" width="660" height="290" rx="10"/><text class="bl" x="236" y="42">API Worker</text>
+<rect class="comp" x="250" y="60" width="190" height="90" rx="8"/><text class="t" x="345" y="88" text-anchor="middle">Tier handlers</text><text class="d" x="345" y="108" text-anchor="middle">tier_api.rs</text><text class="d" x="345" y="126" text-anchor="middle">classify、PATCH tier</text>
+<rect class="comp" x="490" y="60" width="190" height="90" rx="8"/><text class="t" x="585" y="88" text-anchor="middle">Tier rules</text><text class="d" x="585" y="108" text-anchor="middle">tier.rs</text><text class="d" x="585" y="126" text-anchor="middle">長さの門、2 択、閾値</text>
+<rect class="comp" x="720" y="60" width="140" height="90" rx="8"/><text class="t" x="790" y="88" text-anchor="middle">Clef client</text><text class="d" x="790" y="108" text-anchor="middle">clef.rs</text><text class="d" x="790" y="126" text-anchor="middle">要求と応答の検査</text>
+<rect class="store" x="285" y="230" width="120" height="50" rx="8"/><text class="t" x="345" y="260" text-anchor="middle">D1</text>
+<rect class="ext" x="720" y="220" width="140" height="70" rx="8"/><text class="t" x="790" y="248" text-anchor="middle">Workers AI</text><text class="d" x="790" y="268" text-anchor="middle">Clef</text>
+<path class="edge" d="M190 80L250 100" marker-end="url(#a)"/><text class="lbl" x="28" y="145">classify、PATCH</text>
+<path class="edge" d="M440 105L490 105" marker-end="url(#a)"/>
+<path class="edge" d="M680 105L720 105" marker-end="url(#a)"/>
+<path class="edge" d="M790 150L790 220" marker-end="url(#a)"/>
+<path class="edge" d="M345 150L345 230" marker-end="url(#a)"/><text class="lbl" x="353" y="195">ロックを見て UPDATE</text>
+</svg></div>
+<ul class="points">
+<li><code>classify</code> は、長さの門で 2 択を選び、Clef に聞いて結果を返すだけで、書きません。</li>
+<li>書くのは <code>PATCH</code> です。ロック済みの行には、バッチの書き込みは通りません（条件つき UPDATE）。</li>
+<li>公開の応答には tier を出しません。認証つきの応答にだけ出ます。</li>
+</ul>
+
 <!-- ===== Level 3: Frontend ===== -->
 <h2 class="section-label" id="l3b"><span lang="en">Level 3</span> · Component — Frontend Worker</h2>
 <p class="note"><code>frontend/src/</code> の構成。公開側と管理側でクライアントを分け、公開側にトークンを持たせません。</p>
@@ -94,7 +124,7 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
 <rect class="bound" x="20" y="20" width="860" height="430" rx="10"/><text class="bl" x="36" y="42">Frontend Worker（Astro SSR）</text>
 <rect class="comp" x="40" y="60" width="240" height="100" rx="8"/><text class="t" x="160" y="88" text-anchor="middle">Middleware</text><text class="d" x="160" y="108" text-anchor="middle">middleware.ts / access.ts</text><text class="d" x="160" y="126" text-anchor="middle">/admin の JWT 検証、同一オリジン確認</text><text class="d" x="160" y="144" text-anchor="middle">/_actions を 404</text>
 <rect class="comp" x="330" y="60" width="240" height="100" rx="8"/><text class="t" x="450" y="88" text-anchor="middle">Public pages</text><text class="d" x="450" y="108" text-anchor="middle">pages/ index, entry, category, page</text><text class="d" x="450" y="126" text-anchor="middle">rss.xml, whoami</text><text class="d" x="450" y="144" text-anchor="middle">共有キャッシュ可</text>
-<rect class="comp" x="620" y="60" width="240" height="100" rx="8"/><text class="t" x="740" y="88" text-anchor="middle">Admin pages</text><text class="d" x="740" y="108" text-anchor="middle">pages/admin/*, AdminEditor</text><text class="d" x="740" y="126" text-anchor="middle">編集・プレビュー・画像 API</text><text class="d" x="740" y="144" text-anchor="middle">no-store, noindex</text>
+<rect class="comp" x="620" y="60" width="240" height="100" rx="8"/><text class="t" x="740" y="88" text-anchor="middle">Admin pages</text><text class="d" x="740" y="108" text-anchor="middle">pages/admin/*, AdminEditor</text><text class="d" x="740" y="126" text-anchor="middle">編集・画像・tier の表示と操作</text><text class="d" x="740" y="144" text-anchor="middle">no-store, noindex</text>
 <rect class="comp" x="330" y="210" width="240" height="90" rx="8"/><text class="t" x="450" y="238" text-anchor="middle">Public API client</text><text class="d" x="450" y="258" text-anchor="middle">lib/api.ts</text><text class="d" x="450" y="276" text-anchor="middle">トークンなし。公開記事のみ</text>
 <rect class="comp" x="620" y="210" width="240" height="90" rx="8"/><text class="t" x="740" y="238" text-anchor="middle">Admin API client</text><text class="d" x="740" y="258" text-anchor="middle">lib/ の管理用クライアント</text><text class="d" x="740" y="276" text-anchor="middle">管理用トークン付き、下書きも扱う</text>
 <rect class="comp" x="40" y="210" width="240" height="90" rx="8"/><text class="t" x="160" y="238" text-anchor="middle">Markdown renderer</text><text class="d" x="160" y="258" text-anchor="middle">lib/render.ts, ogp.ts</text><text class="d" x="160" y="276" text-anchor="middle">GFM → サニタイズ、ブログカード</text>
@@ -115,6 +145,7 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
 <li><b>書く:</b> 管理者 → Cloudflare Access（Google ログイン）→ Frontend Worker が JWT を検証 → 管理用トークン付きで API を呼ぶ → D1 に保存。</li>
 <li><b>画像:</b> 管理画面から送信 → API が Images で AVIF に変換 → R2 に保存し、公開 URL を返します。</li>
 <li><b>移行:</b> はてなブログのバックアップ（Markdown）→ <code>tools/import-hatena.ts</code> が SQL を生成 → D1 に投入します。</li>
+<li><b>判定:</b> 手元の <code>tools/classify-tiers.ts</code> が API に判定を頼む → API が Workers AI（Clef）に 2 択を聞いて結果を返す → ツールが <code>PATCH</code> で D1 に保存。管理画面では、一覧で tier を確認し、選択、確定、ロック解除ができます。</li>
 <li><b>デプロイ:</b> main の CI 成功後、GitHub Actions が D1 マイグレーション → API → Frontend の順に <code>wrangler deploy</code> します。</li>
 </ul>
 <p class="note">詳細は <a href="https://github.com/Asuforce/arki/blob/main/docs/architecture.md">docs/architecture.md</a> を参照してください。</p>
