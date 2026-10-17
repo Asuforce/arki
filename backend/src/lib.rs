@@ -366,7 +366,10 @@ async fn list_posts(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let category = query_param(&req, "category")?.unwrap_or_default();
     let status = status_filter(&req, include_drafts)?;
     let month = month_filter(&req)?;
-    let tier = tier::list_filter(&query_param(&req, "tier")?.unwrap_or_default(), include_drafts);
+    let tier = tier::list_filter(
+        &query_param(&req, "tier")?.unwrap_or_default(),
+        include_drafts,
+    );
     let search_query: String = query_param(&req, "q")?
         .unwrap_or_default()
         .trim()
