@@ -64,7 +64,8 @@ const tabs = [
                 <option value="" disabled selected={post.tier === null}>未判定</option>
                 {tierOptions.map((o) => <option value={o.value} selected={post.tier === o.value}>{o.label}</option>)}
               </select>
-              {post.tier_locked && <button type="button" data-action="unlock">自動に戻す</button>}
+              {post.tier_locked && <button type="button" data-action="unlock">ロックを外す</button>}
+              {!post.tier_locked && post.tier !== null && <button type="button" data-action="confirm-tier" data-tier={post.tier}>確定</button>}
             </div>
           </div>
           <div class="row-actions">
@@ -104,7 +105,10 @@ const tabs = [
       } catch {
         notice.textContent = "通信に失敗しました";
       }
-      controls.forEach((c) => (c.disabled = false));
+      controls.forEach((c) => {
+        c.disabled = false;
+        if (c instanceof HTMLSelectElement) Array.from(c.options).forEach((o) => (o.selected = o.defaultSelected));
+      });
     }
     const patchTier = (id: string | undefined, body: object) =>
       fetch(`/admin/api/posts/${id}/tier`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -121,11 +125,13 @@ const tabs = [
           ? fetch(`/admin/api/posts/${id}`, { method: "DELETE" })
           : button.dataset.action === "unlock"
             ? patchTier(id, { tier_locked: false })
-            : fetch(`/admin/api/posts/${id}/status`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ status: row.dataset.status === "draft" ? "published" : "draft" }),
-              }),
+            : button.dataset.action === "confirm-tier"
+              ? patchTier(id, { tier: Number(button.dataset.tier) })
+              : fetch(`/admin/api/posts/${id}/status`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ status: row.dataset.status === "draft" ? "published" : "draft" }),
+                }),
       );
     });
     list?.addEventListener("change", (event) => {
