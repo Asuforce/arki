@@ -56,7 +56,8 @@ jobs:
           key: worker-build-${{ runner.os }}-${{ hashFiles('backend/Cargo.lock', 'backend/wrangler.toml.example') }}
       - name: Install worker-build
         if: steps.worker-build.outputs.cache-hit != 'true'
-        run: cargo install --locked "$(grep -o 'worker-build@[^ "]*' wrangler.toml.example)"
+        # rust-cache が ~/.cargo/bin に古い worker-build を復元していることがあり、無いと install が失敗する。
+        run: cargo install --locked --force "$(grep -o 'worker-build@[^ "]*' wrangler.toml.example)"
       # migrations の前に確認する（無いまま migrations だけ進むのを防ぐ）
       - run: worker-build --version
       - name: Generate wrangler.toml
