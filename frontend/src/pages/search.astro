@@ -1,0 +1,31 @@
+---
+import PostList from "../components/PostList.astro";
+import Pagination from "../components/Pagination.astro";
+import Layout from "../layouts/Layout.astro";
+import { listPosts } from "../lib/api";
+
+const q = (Astro.url.searchParams.get("q") ?? "").trim().slice(0, 100);
+const requested = Number(Astro.url.searchParams.get("page") ?? "1");
+const n = Number.isInteger(requested) && requested >= 1 ? requested : 1;
+
+const result = q ? await listPosts({ page: n, q }) : null;
+Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
+---
+
+<Layout title={q ? `${q} の検索結果` : "Search"}>
+  <p class="kicker" lang="en">Search</p>
+  <h1 class="page-title">記事を検索</h1>
+  <form class="search-form" action="/search" method="get" role="search">
+    <input type="search" name="q" value={q} maxlength="100" placeholder="タイトルと本文から探す" aria-label="検索語" />
+    <button type="submit">検索</button>
+  </form>
+  {
+    result && (
+      <>
+        <p class="search-count">{result.total} 件</p>
+        <PostList posts={result.posts} />
+        <Pagination page={result.page} limit={result.limit} total={result.total} basePath={`/search?q=${encodeURIComponent(q)}`} />
+      </>
+    )
+  }
+</Layout>

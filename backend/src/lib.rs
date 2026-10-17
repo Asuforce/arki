@@ -12,6 +12,8 @@ use worker::*;
 
 const DEFAULT_LIMIT: i64 = 20;
 const MAX_LIMIT: i64 = 50;
+/// 検索語の最大文字数。これを超えた分は切り捨てる。
+const MAX_QUERY_CHARS: usize = 100;
 const MAX_SLUG_SUFFIX: i64 = 20;
 /// 公開の記事応答には出さない、編集のための状態。
 const ADMIN_ONLY_FIELDS: &[&str] = &["created_at", "slug_fixed", "date_unset"];
@@ -304,22 +306,20 @@ async fn list_posts(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let category = query_param(&req, "category")?.unwrap_or_default();
     let status = status_filter(&req, include_drafts)?;
     let month = month_filter(&req)?;
-    let title_query = if include_drafts {
-        query_param(&req, "q")?
-            .unwrap_or_default()
-            .trim()
-            .to_string()
-    } else {
-        String::new()
-    };
-    let title_pattern = if title_query.is_empty() {
+    let search_query: String = query_param(&req, "q")?
+        .unwrap_or_default()
+        .trim()
+        .chars()
+        .take(MAX_QUERY_CHARS)
+        .collect();
+    let search_pattern = if search_query.is_empty() {
         String::new()
     } else {
-        like_pattern(&title_query)
+        like_pattern(&search_query)
     };
 
     let filter = "(? = 1 OR p.status = 'published') AND (? = '' OR p.status = ?) \
-                  AND (? = '' OR p.title LIKE ? ESCAPE '\\') AND (? = '' OR p.id IN \
+                  AND (? = '' OR p.title LIKE ? ESCAPE '\\' OR p.content LIKE ? ESCAPE '\\') AND (? = '' OR p.id IN \
                   (SELECT pc.post_id FROM post_categories pc \
                    JOIN categories c ON c.id = pc.category_id WHERE c.name = ?)) \
                   AND (? = '' OR strftime('%Y-%m', p.published_at, '+9 hours') = ?)";
@@ -327,8 +327,9 @@ async fn list_posts(req: Request, ctx: RouteContext<()>) -> Result<Response> {
         num(include_drafts as i64),
         text(&status),
         text(&status),
-        text(&title_pattern),
-        text(&title_pattern),
+        text(&search_pattern),
+        text(&search_pattern),
+        text(&search_pattern),
         text(&category),
         text(&category),
         text(&month),

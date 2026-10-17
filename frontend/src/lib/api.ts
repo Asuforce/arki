@@ -36,10 +36,11 @@ async function get<T>(path: string): Promise<T | null> {
   return (await res.json()) as T;
 }
 
-export async function listPosts(opts: { page?: number; limit?: number; category?: string; month?: string } = {}): Promise<PostList> {
+export async function listPosts(opts: { page?: number; limit?: number; category?: string; month?: string; q?: string } = {}): Promise<PostList> {
   const q = new URLSearchParams({ page: String(opts.page ?? 1), limit: String(opts.limit ?? 20) });
   if (opts.category) q.set("category", opts.category);
   if (opts.month) q.set("month", opts.month);
+  if (opts.q) q.set("q", opts.q);
   const list = await get<PostList>(`/api/posts?${q}`);
   if (!list) throw new Error("API /api/posts not found");
   return list;

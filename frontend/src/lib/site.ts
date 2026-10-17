@@ -15,5 +15,6 @@ export function formatDate(iso: string): string {
 
 export function pageHref(page: number, basePath: string): string {
   if (basePath === "/") return page <= 1 ? "/" : `/page/${page}`;
-  return page <= 1 ? basePath : `${basePath}?page=${page}`;
+  const sep = basePath.includes("?") ? "&" : "?";
+  return page <= 1 ? basePath : `${basePath}${sep}page=${page}`;
 }
