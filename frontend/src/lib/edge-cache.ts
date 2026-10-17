@@ -22,7 +22,12 @@ export async function withEdgeCache(
 ): Promise<Response> {
   if (!cache || !waitUntil || request.method !== "GET") return render();
   const hit = await cache.match(request.url);
-  if (hit) return hit;
+  // キャッシュから返した応答のヘッダーは読み取り専用のことがあるので、作り直す。確認用に印を付ける
+  if (hit) {
+    const headers = new Headers(hit.headers);
+    headers.set("X-Edge-Cache", "HIT");
+    return new Response(hit.body, { status: hit.status, statusText: hit.statusText, headers });
+  }
   const response = await render();
   if (isCacheable(request, response)) waitUntil(cache.put(request.url, response.clone()));
   return response;

@@ -31,6 +31,7 @@ test("withEdgeCache: 2 回目は render しない", async () => {
   const second = await withEdgeCache(get(), cache, (p) => pending.push(p), render);
   assert.equal(calls, 1);
   assert.equal(await second.text(), "ok");
+  assert.equal(second.headers.get("X-Edge-Cache"), "HIT");
 });
 
 test("withEdgeCache: クエリが違えば別のキー", async () => {
