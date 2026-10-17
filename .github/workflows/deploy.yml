@@ -40,6 +40,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      # wrangler.toml.example の build は毎回 worker-build をソースからビルドして遅いので、
+      # インストール済みのバイナリを cache して使う（worker のバージョンが変われば作り直す）。
+      - name: Cache worker-build
+        id: worker-build
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/worker-build
+          key: worker-build-${{ runner.os }}-${{ hashFiles('backend/Cargo.lock', 'backend/wrangler.toml.example') }}
+      - name: Install worker-build
+        if: steps.worker-build.outputs.cache-hit != 'true'
+        run: cargo install --locked "$(grep -o 'worker-build@[^ "]*' wrangler.toml.example)"
+      # migrations の前に確認する（無いまま migrations だけ進むのを防ぐ）
+      - run: worker-build --version
       - name: Generate wrangler.toml
         env:
           D1_DATABASE_ID: ${{ vars.ARKI_D1_DATABASE_ID }}
@@ -47,7 +63,8 @@ jobs:
           IMAGE_BASE_URL: ${{ vars.ARKI_IMAGE_BASE_URL }}
         run: |
           test -n "$D1_DATABASE_ID" && test -n "$BLOG_ORIGIN" && test -n "$IMAGE_BASE_URL"
-          sed -e "s|<YOUR_D1_DATABASE_ID>|$D1_DATABASE_ID|" \
+          sed -e 's|^command = .*|command = "worker-build --release"|' \
+              -e "s|<YOUR_D1_DATABASE_ID>|$D1_DATABASE_ID|" \
               -e "s|https://<your-blog-domain>|$BLOG_ORIGIN|" \
               -e "s|https://<your-image-domain>|$IMAGE_BASE_URL|" \
               wrangler.toml.example > wrangler.toml
