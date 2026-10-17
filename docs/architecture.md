@@ -4,9 +4,9 @@
 .
 ├── backend/    Workers の API（Rust / workers-rs）
 │   ├── migrations/
-│   └── src/lib.rs  util.rs  images.rs
+│   └── src/lib.rs  util.rs  images.rs  tier.rs  clef.rs  tier_api.rs
 ├── frontend/   Astro（SSR）。Worker + 静的ファイルとしてデプロイ
-└── tools/      取り込み、画像移行（TypeScript）
+└── tools/      取り込み、画像移行、ティアの一括判定（TypeScript）
 ```
 
 ブラウザはフロントの Worker にアクセスし、フロントが API の Worker を `fetch()` して D1 の記事を描画します。
@@ -29,6 +29,8 @@ flowchart LR
 - Access の範囲は `/admin*` だけなので、Astro が自動で公開する `/_actions` と `/_server-islands` は 404 にします。
 - 管理用の API クライアントは `lib/admin-api.ts` に分けてあります。公開側の `lib/api.ts` はトークンを持たず、下書きが一覧や RSS に出ません。
 - 公開ページのヘッダーの「Admin」リンクと、記事詳細の「Edit」ボタン（`data-admin-only` を付けた要素）は、ログイン中だけ出します。公開ページは共有キャッシュされるので、ページ自体は変えず、ブラウザが `/whoami`（`no-store`）に尋ねます。Access は `/admin*` の外に `Cf-Access-Jwt-Assertion` を付けないため、`/whoami` は `CF_Authorization` クッキーの JWT を同じ検証にかけ、`{"admin": true | false}` を返します。リンクやボタンを出すだけで、権限は `/admin*` 側で改めて確かめます（セッションを失効させても JWT の期限まではリンクが出ます）。Access アプリの Cookie Path Attribute は無効のままにします。有効にすると、クッキーが `/admin` にしか付かず、`/whoami` に届かないのでリンクが出ません。
+- 記事一覧は、各行に tier（長文、ナレッジ、日記、未判定）と、自動判定なら confidence、人が決めた行にはその印を出します。select で選ぶか「確定」を押すと人が決めたことになり、ロックされます。「ロックを外す」は区分を残してロックだけを外します。タブで tier による絞り込みもできます。
+- tier の書き込みは `pages/admin/api/posts/[id]/tier.ts` が API の `PATCH /api/posts/:id/tier` に流します。通すのは `{tier}` とロック解除だけで、バッチ用の書き方（`source: "auto"`）は 400 にします。純粋な検証は `lib/tier-request.ts` にあります。
 - 見た目は公開側のトークンとフォントを共有し、星とゴーストは出しません。
 
 ## データ
@@ -36,8 +38,27 @@ flowchart LR
 `backend/migrations/` が正です。
 
 - `posts`: `slug`（一意）、`title`、`content`（Markdown）、`excerpt`、`status`（`draft` / `published`）、`published_at`、`created_at`、`updated_at`、`legacy_url`、`slug_fixed` と `date_fixed`（`0` の間は仮の値で、初回公開で確定する。[api.md](api.md#slug-と公開日時)）
+- `tier`（1 長文、2 ナレッジ、3 日記、`NULL` は未判定）、`tier_confidence`（人が決めた行は `NULL`）、`tier_locked`（1 のとき自動の判定は書かない）。認証つきの応答にだけ出し、公開の一覧、記事、RSS には出しません。
 - `categories`、`post_categories`: カテゴリと、記事との多対多
 - 時刻はすべて UTC の ISO 8601（`2019-11-22T18:13:44Z`）で持ちます。文字列のまま並べ替えられます。表示のときだけ JST にします。
+
+## ティア判定
+
+記事に長文、ナレッジ、日記のいずれかを付けます。判定は Cloudflare の Workers AI（Clef）に 2 択を聞く形です。API の Worker だけが Workers AI の binding（`AI`）を持ち、一括判定のツールは `ADMIN_TOKEN` だけを持ちます。
+
+```mermaid
+flowchart LR
+  T["tools/classify-tiers.ts<br/>（手元で実行）"] -->|"POST /api/posts/:id/classify"| P[API の Worker]
+  P -->|"長さの門で 2 択を選ぶ"| C[Workers AI<br/>Clef]
+  C -->|"選択肢、confidence"| P
+  P -->|"tier、confidence（書かない）"| T
+  T -->|"PATCH /api/posts/:id/tier"| P
+  P --> D[(D1)]
+```
+
+- `classify` は判定を返すだけで、書きません。書くのは `PATCH` で、ロック済みの行には自動では書きません。
+- 長さの門（表示される 500 文字）、閾値、選択肢の説明文は、`tier.rs` が持ちます。Clef の呼び出しは `clef.rs`、2 つの route は `tier_api.rs` です。
+- 設計と較正の結果は [tier-scoring.md](tier-scoring.md)、API は [api.md](api.md#ティア) にあります。
 
 ## URL と slug
 
