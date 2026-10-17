@@ -1,8 +1,12 @@
+mod clef;
 mod images;
+mod tier;
+mod tier_api;
 mod util;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use tier::TierState;
 use util::{
     constant_time_eq, epoch_to_iso, first_image_url, is_valid_month, is_valid_slug, iso_to_epoch,
     like_pattern, make_excerpt, slug_from_published_at,
@@ -32,6 +36,8 @@ struct PostSummary {
     categories: Vec<String>,
     /// 本文の最初の画像。読み出しのたびに `content` から求める。
     thumbnail: Option<String>,
+    #[serde(flatten)]
+    tier_state: Option<TierState>,
 }
 
 /// 一覧クエリの 1 行。サムネイルを求めるために `content` を読むが、応答には出さない。
@@ -44,6 +50,9 @@ struct PostSummaryRow {
     excerpt: String,
     status: String,
     published_at: String,
+    tier: Option<i64>,
+    tier_confidence: Option<f64>,
+    tier_locked: i64,
 }
 
 impl From<PostSummaryRow> for PostSummary {
@@ -57,7 +66,25 @@ impl From<PostSummaryRow> for PostSummary {
             status: row.status,
             published_at: row.published_at,
             categories: Vec::new(),
+            tier_state: None,
         }
+    }
+}
+
+impl PostSummary {
+    fn with_tier(mut self, state: TierState) -> Self {
+        self.tier_state = Some(state);
+        self
+    }
+}
+
+fn summary_for(row: PostSummaryRow, admin: bool) -> PostSummary {
+    let state = TierState::from_columns(row.tier, row.tier_confidence, row.tier_locked);
+    let summary = PostSummary::from(row);
+    if admin {
+        summary.with_tier(state)
+    } else {
+        summary
     }
 }
 
@@ -79,6 +106,8 @@ struct Post {
     /// true なら公開日時は決まっておらず、初回公開の瞬間が入る（`published_at` は仮の値）。
     date_unset: bool,
     categories: Vec<String>,
+    #[serde(flatten)]
+    tier_state: Option<TierState>,
 }
 
 #[derive(Deserialize)]
@@ -95,6 +124,9 @@ struct PostRow {
     legacy_url: Option<String>,
     slug_fixed: i64,
     date_fixed: i64,
+    tier: Option<i64>,
+    tier_confidence: Option<f64>,
+    tier_locked: i64,
 }
 
 impl From<PostRow> for Post {
@@ -113,8 +145,36 @@ impl From<PostRow> for Post {
             updated_at: row.updated_at,
             legacy_url: row.legacy_url,
             categories: Vec::new(),
+            tier_state: None,
         }
     }
+}
+
+impl Post {
+    fn with_tier(mut self, state: TierState) -> Self {
+        self.tier_state = Some(state);
+        self
+    }
+}
+
+fn post_for(row: PostRow, admin: bool) -> Post {
+    let state = TierState::from_columns(row.tier, row.tier_confidence, row.tier_locked);
+    let post = Post::from(row);
+    if admin {
+        post.with_tier(state)
+    } else {
+        post
+    }
+}
+
+fn post_json(post: &Post, admin: bool) -> Result<serde_json::Value> {
+    let mut value = serde_json::to_value(post)?;
+    if let Some(object) = value.as_object_mut().filter(|_| !admin) {
+        for key in ADMIN_ONLY_FIELDS {
+            object.remove(*key);
+        }
+    }
+    Ok(value)
 }
 
 #[derive(Debug, Deserialize)]
@@ -153,7 +213,7 @@ fn text(s: &str) -> JsValue {
     JsValue::from_str(s)
 }
 
-fn num(n: i64) -> JsValue {
+pub(crate) fn num(n: i64) -> JsValue {
     JsValue::from_f64(n as f64)
 }
 
@@ -354,7 +414,8 @@ async fn list_posts(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     ]);
     let rows: Vec<PostSummaryRow> = d1
         .prepare(format!(
-            "SELECT p.id, p.slug, p.title, p.content, p.excerpt, p.status, p.published_at \
+            "SELECT p.id, p.slug, p.title, p.content, p.excerpt, p.status, p.published_at, \
+             p.tier, p.tier_confidence, p.tier_locked \
              FROM posts p WHERE {filter} \
              ORDER BY CASE WHEN ? = 1 AND p.status = 'draft' THEN 0 ELSE 1 END, \
              p.published_at DESC, p.id DESC LIMIT ? OFFSET ?"
@@ -363,7 +424,10 @@ async fn list_posts(req: Request, ctx: RouteContext<()>) -> Result<Response> {
         .all()
         .await?
         .results()?;
-    let mut posts: Vec<PostSummary> = rows.into_iter().map(PostSummary::from).collect();
+    let mut posts: Vec<PostSummary> = rows
+        .into_iter()
+        .map(|row| summary_for(row, include_drafts))
+        .collect();
     attach_categories(&d1, &mut posts).await?;
 
     Response::from_json(&json!({
@@ -374,25 +438,25 @@ async fn list_posts(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     }))
 }
 
-async fn fetch_post(
+pub(crate) async fn fetch_post(
     d1: &D1Database,
     where_sql: &str,
     key: JsValue,
-    include_drafts: bool,
+    admin: bool,
 ) -> Result<Option<Post>> {
     let row: Option<PostRow> = d1
         .prepare(format!(
             "SELECT id, slug, title, content, excerpt, status, published_at, created_at, \
-             updated_at, legacy_url, slug_fixed, date_fixed \
+             updated_at, legacy_url, slug_fixed, date_fixed, tier, tier_confidence, tier_locked \
              FROM posts WHERE {where_sql} AND (? = 1 OR status = 'published')"
         ))
-        .bind(&[key, num(include_drafts as i64)])?
+        .bind(&[key, num(admin as i64)])?
         .first(None)
         .await?;
     let Some(row) = row else {
         return Ok(None);
     };
-    let mut post = Post::from(row);
+    let mut post = post_for(row, admin);
     let rows: Vec<CategoryRow> = d1
         .prepare(
             "SELECT pc.post_id AS post_id, c.name AS name FROM post_categories pc \
@@ -413,15 +477,7 @@ async fn get_post_by_slug(req: Request, ctx: RouteContext<()>) -> Result<Respons
     let d1 = ctx.env.d1("DB")?;
     let admin = is_admin(&req, &ctx.env);
     match fetch_post(&d1, "slug = ?", text(slug), admin).await? {
-        Some(post) => {
-            let mut value = serde_json::to_value(&post)?;
-            if let Some(object) = value.as_object_mut().filter(|_| !admin) {
-                for key in ADMIN_ONLY_FIELDS {
-                    object.remove(*key);
-                }
-            }
-            Response::from_json(&value)
-        }
+        Some(post) => Response::from_json(&post_json(&post, admin)?),
         None => json_error("Not Found", 404),
     }
 }
@@ -772,7 +828,7 @@ fn with_cors(mut response: Response, env: &Env) -> Result<Response> {
     headers.set("Access-Control-Allow-Origin", &origin)?;
     headers.set(
         "Access-Control-Allow-Methods",
-        "GET, POST, PUT, DELETE, OPTIONS",
+        "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     )?;
     headers.set(
         "Access-Control-Allow-Headers",
@@ -798,6 +854,8 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
         .get_async("/api/archive", list_archive)
         .post_async("/api/posts", create_post)
         .put_async("/api/posts/:id", update_post)
+        .post_async("/api/posts/:id/classify", tier_api::classify_post)
+        .patch_async("/api/posts/:id/tier", tier_api::set_tier)
         .delete_async("/api/posts/:id", delete_post)
         .post_async("/api/images", images::upload_image)
         .run(req, env.clone())
@@ -830,6 +888,9 @@ mod tests {
             excerpt: "e".into(),
             status: "published".into(),
             published_at: "2019-11-22T18:13:44Z".into(),
+            tier: Some(2),
+            tier_confidence: Some(0.7),
+            tier_locked: 0,
         }
     }
 
@@ -840,6 +901,61 @@ mod tests {
         let object = value.as_object().unwrap();
         assert_eq!(object["thumbnail"], "/img/a.png");
         assert!(!object.contains_key("content"));
+    }
+
+    fn post_row() -> PostRow {
+        PostRow {
+            id: 1,
+            slug: "2019/11/23/031344".into(),
+            title: "t".into(),
+            content: "本文".into(),
+            excerpt: "e".into(),
+            status: "published".into(),
+            published_at: "2019-11-22T18:13:44Z".into(),
+            created_at: "2019-11-22T18:13:44Z".into(),
+            updated_at: "2019-11-22T18:13:44Z".into(),
+            legacy_url: None,
+            slug_fixed: 1,
+            date_fixed: 1,
+            tier: Some(2),
+            tier_confidence: Some(0.7),
+            tier_locked: 1,
+        }
+    }
+
+    fn tier_keys(value: &serde_json::Value) -> Vec<&String> {
+        value
+            .as_object()
+            .unwrap()
+            .keys()
+            .filter(|k| k.starts_with("tier"))
+            .collect()
+    }
+
+    #[test]
+    fn summary_shows_tier_only_for_admins() {
+        let admin = serde_json::to_value(summary_for(row("本文"), true)).unwrap();
+        assert_eq!(admin["tier"], 2);
+        assert_eq!(admin["tier_confidence"], 0.7);
+        assert_eq!(admin["tier_locked"], false);
+        let public = serde_json::to_value(summary_for(row("本文"), false)).unwrap();
+        assert!(tier_keys(&public).is_empty());
+    }
+
+    #[test]
+    fn post_shows_tier_and_editing_fields_only_for_admins() {
+        let admin = post_json(&post_for(post_row(), true), true).unwrap();
+        assert_eq!(admin["tier"], 2);
+        assert_eq!(admin["tier_locked"], true);
+        for key in ADMIN_ONLY_FIELDS {
+            assert!(admin.get(*key).is_some(), "{key}");
+        }
+        let public = post_json(&post_for(post_row(), false), false).unwrap();
+        assert!(tier_keys(&public).is_empty());
+        for key in ADMIN_ONLY_FIELDS {
+            assert!(public.get(*key).is_none(), "{key}");
+        }
+        assert_eq!(public["content"], "本文");
     }
 
     #[test]
