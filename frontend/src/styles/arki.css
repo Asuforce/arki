@@ -161,3 +161,8 @@ main > h1 { font-family: var(--display); font-weight: 700; letter-spacing: 0.02e
 .month-nav { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--rule); font-size: 0.9rem; }
 .month-nav a { color: var(--text-soft); text-decoration: none; }
 .month-nav a:hover { color: var(--accent-text); }
+
+.search-form { display: flex; gap: 0.5rem; margin: 1rem 0 1.5rem; }
+.search-form input { flex: 1; min-width: 0; padding: 0.5rem 0.75rem; font: inherit; color: var(--text); background: transparent; border: 1px solid var(--muted); border-radius: 4px; }
+.search-form button { padding: 0.5rem 1rem; font: inherit; color: var(--text); background: transparent; border: 1px solid var(--muted); border-radius: 4px; cursor: pointer; }
+.search-count { color: var(--text-soft); margin-bottom: 1rem; }

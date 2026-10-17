@@ -50,7 +50,7 @@ flowchart LR
 | `/category`、`/category/<名前>?page=N` | カテゴリ一覧、カテゴリの記事 |
 | `/rss.xml` | 最新 20 件の RSS |
 
-応答には `Cache-Control: public, max-age=60, s-maxage=600` を付けます。
+応答には `Cache-Control: public, max-age=60, s-maxage=600` を付けます。Worker の応答は `s-maxage` だけではエッジに残らないので、`middleware.ts` が `lib/edge-cache.ts` で Cache API（`caches.default`、キーは URL とクエリ）に入れます。入れるのは `/admin*` 以外の、成功した GET で、`public` と `s-maxage` があり、`Set-Cookie` が無い応答だけです。`Authorization` つきの要求は通しません。キャッシュから返した応答には `X-Edge-Cache: HIT` を付けます。Cache API の中身は、入れたデータセンターの中だけに残ります。独自ドメインでないと効きません。記事を更新しても、最長 10 分は古い表示が残ります。
 
 ## 本文の表示
 

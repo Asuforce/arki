@@ -2,6 +2,7 @@ import { defineMiddleware } from "astro:middleware";
 import { AccessUnavailableError, verifyAccessJwt } from "./lib/access";
 import { devBypass, loadAccessConfig } from "./lib/access-config";
 import { loadAdminApi } from "./lib/admin-config";
+import { withEdgeCache, type EdgeCache } from "./lib/edge-cache";
 
 declare global {
   namespace App {
@@ -29,7 +30,12 @@ function isSameOrigin(request: Request, url: URL): boolean {
 export const onRequest = defineMiddleware(async (context, next) => {
   const { request, url } = context;
   if (isUnusedFrameworkPath(url.pathname)) return text(404, "Not Found");
-  if (!isAdminPath(url.pathname)) return next();
+  if (!isAdminPath(url.pathname)) {
+    // 認証つきの要求は、共有キャッシュに入れも、出しもしない
+    const cache = request.headers.has("Authorization") ? undefined : (globalThis as { caches?: { default?: EdgeCache } }).caches?.default;
+    const cfContext = (context.locals as { cfContext?: { waitUntil(p: Promise<unknown>): void } }).cfContext;
+    return withEdgeCache(request, cache, cfContext && ((p) => cfContext.waitUntil(p)), next);
+  }
 
   if (devBypass()) {
     context.locals.adminEmail = "dev@localhost";
