@@ -39,6 +39,7 @@
 .badge { padding: 0 0.5rem; border: 1px solid var(--rule); font-size: 0.75rem; }
 .badge.draft { color: var(--accent-text); border-color: var(--accent-text); }
 .chip { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0 0.5rem; border: 1px solid var(--rule); font-size: 0.8rem; }
+.row-meta select { font-size: 0.8rem; max-width: 100%; }
 .admin-pagination { display: flex; justify-content: space-between; margin-top: 1.5rem; }
 .notice { color: #d44; min-height: 1.5em; }
 @media (max-width: 640px) {

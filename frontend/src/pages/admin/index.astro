@@ -19,6 +19,12 @@ const href = (overrides: Record<string, string | number>): string => {
   const text = query.toString();
   return text ? `/admin?${text}` : "/admin";
 };
+const tierOptions = [
+  { value: 1, label: "長文" },
+  { value: 2, label: "ナレッジ" },
+  { value: 3, label: "日記" },
+];
+const tierLabel = (tier: number | null): string => tierOptions.find((o) => o.value === tier)?.label ?? "未判定";
 const tabs = [
   { label: "すべて", value: "" },
   { label: "下書き", value: "draft" },
@@ -51,6 +57,16 @@ const tabs = [
               {post.status === "published" && <time datetime={post.published_at}>{formatDate(post.published_at)}</time>}
               {post.categories.map((c) => <span class="chip">{c}</span>)}
             </div>
+            <div class="row-meta">
+              <span class="badge">{tierLabel(post.tier)}</span>
+              {post.tier_locked ? <span class="chip">人が決めた</span> : post.tier !== null && (post.tier_confidence !== null ? <span class="chip">自動判定 {post.tier_confidence.toFixed(2)}</span> : <span class="chip">ロック解除済み</span>)}
+              <select data-action="tier" aria-label="ティア">
+                <option value="" disabled selected={post.tier === null}>未判定</option>
+                {tierOptions.map((o) => <option value={o.value} selected={post.tier === o.value}>{o.label}</option>)}
+              </select>
+              {post.tier_locked && <button type="button" data-action="unlock">ロックを外す</button>}
+              {!post.tier_locked && post.tier !== null && <button type="button" data-action="confirm-tier" data-tier={post.tier}>確定</button>}
+            </div>
           </div>
           <div class="row-actions">
             {post.status === "published" && <a href={`/entry/${post.slug}`} target="_blank" rel="noopener">表示</a>}
@@ -75,24 +91,12 @@ const tabs = [
 
   <script>
     const notice = document.getElementById("list-notice")!;
-    document.querySelector(".admin-list")?.addEventListener("click", async (event) => {
-      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-action]");
-      const row = button?.closest<HTMLElement>("li[data-id]");
-      if (!button || !row) return;
-      const id = row.dataset.id;
-      const title = row.dataset.title || "この記事";
-      if (button.dataset.action === "delete" && !confirm(`「${title}」を削除します。元に戻せません。`)) return;
-      const buttons = document.querySelectorAll<HTMLButtonElement>(".admin-list button");
-      buttons.forEach((b) => (b.disabled = true));
+    const list = document.querySelector(".admin-list");
+    async function run(request: () => Promise<Response>) {
+      const controls = document.querySelectorAll<HTMLButtonElement | HTMLSelectElement>(".admin-list button, .admin-list select");
+      controls.forEach((c) => (c.disabled = true));
       try {
-        const res =
-          button.dataset.action === "delete"
-            ? await fetch(`/admin/api/posts/${id}`, { method: "DELETE" })
-            : await fetch(`/admin/api/posts/${id}/status`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ status: row.dataset.status === "draft" ? "published" : "draft" }),
-              });
+        const res = await request();
         if (res.ok) {
           location.reload();
           return;
@@ -101,7 +105,40 @@ const tabs = [
       } catch {
         notice.textContent = "通信に失敗しました";
       }
-      buttons.forEach((b) => (b.disabled = false));
+      controls.forEach((c) => {
+        c.disabled = false;
+        if (c instanceof HTMLSelectElement) Array.from(c.options).forEach((o) => (o.selected = o.defaultSelected));
+      });
+    }
+    const patchTier = (id: string | undefined, body: object) =>
+      fetch(`/admin/api/posts/${id}/tier`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+    list?.addEventListener("click", (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-action]");
+      const row = button?.closest<HTMLElement>("li[data-id]");
+      if (!button || !row) return;
+      const id = row.dataset.id;
+      const title = row.dataset.title || "この記事";
+      if (button.dataset.action === "delete" && !confirm(`「${title}」を削除します。元に戻せません。`)) return;
+      void run(() =>
+        button.dataset.action === "delete"
+          ? fetch(`/admin/api/posts/${id}`, { method: "DELETE" })
+          : button.dataset.action === "unlock"
+            ? patchTier(id, { tier_locked: false })
+            : button.dataset.action === "confirm-tier"
+              ? patchTier(id, { tier: Number(button.dataset.tier) })
+              : fetch(`/admin/api/posts/${id}/status`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ status: row.dataset.status === "draft" ? "published" : "draft" }),
+                }),
+      );
+    });
+    list?.addEventListener("change", (event) => {
+      const select = event.target as HTMLSelectElement;
+      const row = select.closest<HTMLElement>("li[data-id]");
+      if (select.dataset.action !== "tier" || !row) return;
+      void run(() => patchTier(row.dataset.id, { tier: Number(select.value) }));
     });
   </script>
 </AdminLayout>

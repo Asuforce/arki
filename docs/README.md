@@ -6,7 +6,7 @@
 - [posting.md](posting.md) 管理画面での投稿
 - [hatena-import.md](hatena-import.md) はてなブログの取り込みと画像の移行
 - [deploy.md](deploy.md) デプロイとバックアップ
-- [tier-scoring.md](tier-scoring.md) 記事のティア判定の設計（実装前）
+- [tier-scoring.md](tier-scoring.md) 記事のティア判定の設計
 
 ## 方針
 

@@ -1,6 +1,19 @@
-import type { PostList } from "./api";
+import type { PostList, PostSummary } from "./api";
 
-export interface AdminPost {
+/** 管理用のトークンつきの応答だけが持つ。公開側の型には載せない。 */
+export interface TierState {
+  tier: 1 | 2 | 3 | null;
+  tier_confidence: number | null;
+  tier_locked: boolean;
+}
+
+export type AdminPostSummary = PostSummary & TierState;
+
+export interface AdminPostList extends Omit<PostList, "posts"> {
+  posts: AdminPostSummary[];
+}
+
+export interface AdminPost extends TierState {
   id: number;
   slug: string;
   title: string;
@@ -24,7 +37,7 @@ export interface AdminApiConfig {
 
 export interface AdminApi {
   send(method: string, path: string, body?: BodyInit | null, headers?: Record<string, string>): Promise<Response>;
-  listPosts(opts: { page?: number; status?: string; q?: string }): Promise<PostList>;
+  listPosts(opts: { page?: number; status?: string; q?: string }): Promise<AdminPostList>;
   getPost(id: number): Promise<AdminPost | null>;
   categoryNames(): Promise<string[]>;
 }
@@ -54,7 +67,7 @@ export function createAdminApi(config: AdminApiConfig): AdminApi {
       const query = new URLSearchParams({ page: String(page), limit: "20" });
       if (status) query.set("status", status);
       if (q) query.set("q", q);
-      const list = await json<PostList>(`/api/posts?${query}`);
+      const list = await json<AdminPostList>(`/api/posts?${query}`);
       if (!list) throw new Error("API /api/posts not found");
       return list;
     },

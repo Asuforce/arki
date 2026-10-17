@@ -18,8 +18,15 @@ bucket_name = "arki-images"
 [images]
 binding = "IMAGES"
 
+[ai]
+binding = "AI"
+
 [vars]
 CORS_ALLOW_ORIGIN = "https://<your-blog-domain>"
 IMAGE_BASE_URL = "https://<your-image-domain>"
+# ティア判定。未設定なら、モデルは clef-flash、閾値は分岐ごとに 0.65
+TIER_MODEL = "@cf/cloudflare/clef-flash"
+TIER_THRESHOLD_LONG = "0.65"
+TIER_THRESHOLD_SHORT = "0.65"
 
 # Secret (not in this file): npx wrangler secret put ADMIN_TOKEN
