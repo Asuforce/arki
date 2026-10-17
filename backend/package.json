@@ -1,0 +1,8 @@
+{
+  "name": "arki-backend",
+  "private": true,
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^4.125.0"
+  }
+}
