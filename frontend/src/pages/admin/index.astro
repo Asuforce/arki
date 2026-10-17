@@ -7,14 +7,15 @@ const api = loadAdminApi();
 if (!api) return new Response("ADMIN_TOKEN is not set", { status: 503 });
 
 const status = ["draft", "published"].includes(Astro.url.searchParams.get("status") ?? "") ? Astro.url.searchParams.get("status")! : "";
+const tier = ["1", "2", "3", "none"].includes(Astro.url.searchParams.get("tier") ?? "") ? Astro.url.searchParams.get("tier")! : "";
 const q = (Astro.url.searchParams.get("q") ?? "").trim();
 const page = Math.max(1, Math.floor(Number(Astro.url.searchParams.get("page"))) || 1);
-const list = await api.listPosts({ page, status, q });
+const list = await api.listPosts({ page, status, tier, q });
 const lastPage = Math.max(1, Math.ceil(list.total / list.limit));
 
 const href = (overrides: Record<string, string | number>): string => {
   const query = new URLSearchParams();
-  const values: Record<string, string | number> = { status, q, page, ...overrides };
+  const values: Record<string, string | number> = { status, tier, q, page, ...overrides };
   for (const [key, value] of Object.entries(values)) if (value && !(key === "page" && value === 1)) query.set(key, String(value));
   const text = query.toString();
   return text ? `/admin?${text}` : "/admin";
@@ -25,6 +26,11 @@ const tierOptions = [
   { value: 3, label: "日記" },
 ];
 const tierLabel = (tier: number | null): string => tierOptions.find((o) => o.value === tier)?.label ?? "未判定";
+const tierTabs = [
+  { label: "すべて", value: "" },
+  ...tierOptions.map((o) => ({ label: o.label, value: String(o.value) })),
+  { label: "未判定", value: "none" },
+];
 const tabs = [
   { label: "すべて", value: "" },
   { label: "下書き", value: "draft" },
@@ -37,8 +43,12 @@ const tabs = [
     <nav class="tabs" aria-label="状態">
       {tabs.map((t) => <a href={href({ status: t.value, page: 1 })} aria-current={t.value === status ? "page" : undefined}>{t.label}</a>)}
     </nav>
+    <nav class="tabs" aria-label="区分">
+      {tierTabs.map((t) => <a href={href({ tier: t.value, page: 1 })} aria-current={t.value === tier ? "page" : undefined}>{t.label}</a>)}
+    </nav>
     <form class="search" method="get" action="/admin">
       {status && <input type="hidden" name="status" value={status} />}
+      {tier && <input type="hidden" name="tier" value={tier} />}
       <input type="search" name="q" value={q} placeholder="タイトルで検索" aria-label="タイトルで検索" />
       <button type="submit">検索</button>
     </form>

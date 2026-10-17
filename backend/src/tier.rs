@@ -91,6 +91,17 @@ impl Gate {
     }
 }
 
+/// 一覧の `tier` の指定（`1`、`2`、`3`、未判定の `none`）。tier は管理者にだけ見せるので、管理者以外は無視する。
+pub fn list_filter(raw: &str, is_admin: bool) -> &'static str {
+    match (is_admin, raw) {
+        (true, "1") => "1",
+        (true, "2") => "2",
+        (true, "3") => "3",
+        (true, "none") => "none",
+        _ => "",
+    }
+}
+
 pub fn decide(gate: Gate, pick: Pick, confidence: f64, threshold: f64) -> Verdict {
     match pick {
         Pick::Knowledge if confidence >= threshold => Verdict {
@@ -501,6 +512,17 @@ mod tests {
     fn gate_is_long_from_the_gate_length() {
         assert_eq!(Gate::of(LENGTH_GATE - 1), Gate::Short);
         assert_eq!(Gate::of(LENGTH_GATE), Gate::Long);
+    }
+
+    #[test]
+    fn list_filter_is_admin_only() {
+        for key in ["1", "2", "3", "none"] {
+            assert_eq!(list_filter(key, true), key);
+            assert_eq!(list_filter(key, false), "");
+        }
+        for raw in ["", "0", "4", "all", "None", "1 "] {
+            assert_eq!(list_filter(raw, true), "");
+        }
     }
 
     #[test]
