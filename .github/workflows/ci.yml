@@ -1,9 +1,9 @@
 name: ci
 
+# main への push では走らせない。main は PR の merge でしか進まず、検証は PR で済んでいる。
+# デプロイは deploy.yml が main への push で直接動かす。
 on:
   pull_request:
-  push:
-    branches: [main]
 
 permissions:
   contents: read
