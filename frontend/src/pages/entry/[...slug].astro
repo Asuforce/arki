@@ -13,7 +13,7 @@ const html = await expandLinkCards(renderPost(post.content));
 Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
 ---
 
-<Layout title={post.title} description={post.excerpt}>
+<Layout title={post.title} description={post.excerpt} type="article">
   <div class="read-progress" aria-hidden="true"></div>
   <article class="post">
     <header>
