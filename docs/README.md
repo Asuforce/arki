@@ -20,7 +20,8 @@
 
 ```text
 このrepo       現行仕様・開発・運用
-Asuforce/docs  調査・計画・履歴
+Asuforce/docs/<repo>/wiki  調査・計画・履歴
+Asuforce/docs/<repo>/evidence  検証資料
 ```
 
 未対応事項は [GitHub Issues](https://github.com/Asuforce/arki/issues) で管理します。移行時に現行コードで確認した課題は [#30](https://github.com/Asuforce/arki/issues/30) を参照してください。
