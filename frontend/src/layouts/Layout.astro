@@ -15,6 +15,7 @@ interface Props {
   type?: "website" | "article";
 }
 const { title, description, type = "website" } = Astro.props;
+const isAdmin = Boolean(Astro.locals.isAdmin);
 const pageTitle = title ? `${title} | ${siteTitle}` : siteTitle;
 const ogDescription = description || "日常を忘れるな";
 const canonicalUrl = new URL(Astro.url.pathname, Astro.url.origin).href;
@@ -68,7 +69,7 @@ const ogImage = new URL("/og.png", Astro.url.origin).href;
       <div class="container">
         <a class="site-title" href="/"><Ghost variant="mark" />{siteTitle}</a>
         <div class="site-tools">
-          <a class="site-nav" data-admin-only lang="en" href="/admin" hidden>Admin</a>
+          {isAdmin && <a class="site-nav" lang="en" href="/admin">Admin</a>}
           <a class="site-nav" lang="en" href="/search">Search</a>
           <a class="site-nav" lang="en" href="/archive">Archive</a>
           <a class="site-nav" lang="en" href="/category">Category</a>
@@ -89,21 +90,6 @@ const ogImage = new URL("/og.png", Astro.url.origin).href;
     <script>
       import { initWorld } from "../scripts/world";
       initWorld();
-    </script>
-    <script>
-      function showAdminLink(): void {
-        fetch("/whoami", { cache: "no-store" })
-          .then((res) => (res.ok ? res.json() : null))
-          .then((body: { admin?: boolean } | null) => {
-            document.querySelectorAll<HTMLElement>("[data-admin-only]").forEach((el) => (el.hidden = !body?.admin));
-          })
-          .catch(() => {});
-      }
-      showAdminLink();
-      // 戻るで bfcache から復元されたページは、ログインの前後で状態が古い
-      window.addEventListener("pageshow", (event) => {
-        if (event.persisted) showAdminLink();
-      });
     </script>
   </body>
 </html>

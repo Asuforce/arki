@@ -28,7 +28,7 @@ flowchart LR
 - `/admin` の応答は `Cache-Control: no-store` と `X-Robots-Tag: noindex` です。書き込みは同一オリジンの要求だけを通します。
 - Access の範囲は `/admin*` だけなので、Astro が自動で公開する `/_actions` と `/_server-islands` は 404 にします。
 - 管理用の API クライアントは `lib/admin-api.ts` に分けてあります。公開側の `lib/api.ts` はトークンを持たず、下書きが一覧や RSS に出ません。
-- 公開ページのヘッダーの「Admin」リンクと、記事詳細の「Edit」ボタン（`data-admin-only` を付けた要素）は、ログイン中だけ出します。公開ページは共有キャッシュされるので、ページ自体は変えず、ブラウザが `/whoami`（`no-store`）に尋ねます。Access は `/admin*` の外に `Cf-Access-Jwt-Assertion` を付けないため、`/whoami` は `CF_Authorization` クッキーの JWT を同じ検証にかけ、`{"admin": true | false}` を返します。リンクやボタンを出すだけで、権限は `/admin*` 側で改めて確かめます（セッションを失効させても JWT の期限まではリンクが出ます）。Access アプリの Cookie Path Attribute は無効のままにします。有効にすると、クッキーが `/admin` にしか付かず、`/whoami` に届かないのでリンクが出ません。
+- 公開ページのヘッダーの「Admin」リンクと、記事詳細の「Edit」ボタンは、ログイン中だけサーバ側で出します。`middleware.ts` が公開側でも `CF_Authorization` クッキーの JWT を検証して `locals.isAdmin` に載せ、管理者の応答は `Cache-Control: private, no-store` にして共有キャッシュに入れません（非管理者の応答には管理リンクを含めず、従来どおり共有キャッシュに入れます）。Access アプリの Cookie Path Attribute は無効のままにします。有効にすると、クッキーが `/admin` にしか付かず、公開ページの検証に届かないためリンクが出ません。
 - 記事一覧は、各行に tier（長文、ナレッジ、日記、未判定）と、自動判定なら confidence、人が決めた行にはその印を出します。select で選ぶか「確定」を押すと人が決めたことになり、ロックされます。「ロックを外す」は区分を残してロックだけを外します。タブで tier による絞り込みもできます。
 - tier の書き込みは `pages/admin/api/posts/[id]/tier.ts` が API の `PATCH /api/posts/:id/tier` に流します。通すのは `{tier}` とロック解除だけで、バッチ用の書き方（`source: "auto"`）は 400 にします。純粋な検証は `lib/tier-request.ts` にあります。
 - 見た目は公開側のトークンとフォントを共有し、星とゴーストは出しません。
@@ -70,8 +70,10 @@ flowchart LR
 | `/entry/<slug>` | 記事 |
 | `/category`、`/category/<名前>?page=N` | カテゴリ一覧、カテゴリの記事 |
 | `/rss.xml` | 最新 20 件の RSS |
+| `/sitemap.xml` | 公開記事のサイトマップ（`lastmod` 付き） |
+| `/robots.txt` | クローラ向けの制御とサイトマップ案内 |
 
-応答には `Cache-Control: public, max-age=60, s-maxage=600` を付けます。Worker の応答は `s-maxage` だけではエッジに残らないので、`middleware.ts` が `lib/edge-cache.ts` で Cache API（`caches.default`、キーは URL とクエリ）に入れます。入れるのは `/admin*` 以外の、成功した GET で、`public` と `s-maxage` があり、`Set-Cookie` が無い応答だけです。`Authorization` つきの要求は通しません。キャッシュから返した応答には `X-Edge-Cache: HIT` を付けます。Cache API の中身は、入れたデータセンターの中だけに残ります。独自ドメインでないと効きません。記事を更新しても、最長 10 分は古い表示が残ります。
+公開ページの応答には `Cache-Control: public, max-age=60, s-maxage=600` を付けます（`/sitemap.xml` と `/robots.txt` は `public, max-age=300, s-maxage=3600`、`/rss.xml` は `public, max-age=300`）。Worker の応答は `s-maxage` だけではエッジに残らないので、`middleware.ts` が `lib/edge-cache.ts` で Cache API（`caches.default`、キーは URL とクエリ）に入れます。入れるのは `/admin*` 以外の、成功した GET で、`public` と `s-maxage` があり、`Set-Cookie` が無い応答だけです。`Authorization` つきの要求は通しません。キャッシュから返した応答には `X-Edge-Cache: HIT` を付けます。Cache API の中身は、入れたデータセンターの中だけに残ります。独自ドメインでないと効きません。記事を更新しても、最長 10 分は古い表示が残ります。
 
 ## 本文の表示
 
