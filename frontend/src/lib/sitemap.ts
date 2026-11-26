@@ -8,7 +8,7 @@ export interface SitemapEntry {
 /** 公開記事の一覧から `lastmod` 付きの XML Sitemap を組み立てる。 */
 export function renderSitemapXml(origin: string, entries: SitemapEntry[]): string {
   const base = origin.replace(/\/$/, "");
-  const latest = entries[0]?.updated_at;
+  const latest = entries.reduce((max, e) => (e.updated_at > max ? e.updated_at : max), "");
   const rootLastmod = latest ? `\n    <lastmod>${escapeXml(latest)}</lastmod>` : "";
   const urls = [
     `  <url>\n    <loc>${escapeXml(`${base}/`)}</loc>${rootLastmod}\n  </url>`,
