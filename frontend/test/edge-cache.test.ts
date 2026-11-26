@@ -86,7 +86,7 @@ test("apiPurgePaths: SSR と一致する API パスを生成する", () => {
   const paths = apiPurgePaths([
     {
       slug: "2026/01/01/010000",
-      categories: [" tech "],
+      categories: [" foo bar "],
       published_at: "2025-12-31T16:00:00Z",
     },
   ]);
@@ -95,7 +95,7 @@ test("apiPurgePaths: SSR と一致する API パスを生成する", () => {
     "/api/categories",
     "/api/posts/by-slug/2026/01/01/010000",
     "/api/posts?page=1&limit=20",
-    "/api/posts?page=1&limit=20&category=tech",
+    "/api/posts?page=1&limit=20&category=foo+bar",
     "/api/posts?page=1&limit=50&month=2026-01",
     "/api/sitemap",
   ]);

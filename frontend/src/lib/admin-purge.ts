@@ -3,6 +3,7 @@ import type { ZonePurgeConfig } from "./admin-config";
 
 const JST_OFFSET_MS = 9 * 3600 * 1000;
 const CF_PURGE_BATCH_LIMIT = 30;
+const CF_PURGE_TIMEOUT_MS = 3000;
 
 export interface PurgeTarget {
   slug?: string | null;
@@ -52,7 +53,7 @@ export function apiPurgePaths(targets: PurgeTarget[]): string[] {
     }
     for (const raw of t.categories ?? []) {
       const c = raw.trim();
-      if (c) paths.add(`/api/posts?page=1&limit=20&category=${encodeURIComponent(c)}`);
+      if (c) paths.add(`/api/posts?${new URLSearchParams({ page: "1", limit: "20", category: c })}`);
     }
     if (t.published_at) {
       const ym = jstYearMonth(t.published_at);
@@ -101,6 +102,7 @@ export async function purgePaths(
                   "Content-Type": "application/json",
                 },
                 body: JSON.stringify({ files }),
+                signal: AbortSignal.timeout(CF_PURGE_TIMEOUT_MS),
               },
             );
             const body = (await res.json().catch(() => null)) as { success?: boolean; errors?: unknown } | null;

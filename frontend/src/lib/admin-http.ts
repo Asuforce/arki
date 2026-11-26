@@ -10,13 +10,16 @@ export function json(body: unknown, status = 200): Response {
 
 /** 上流の 401 と 403 は ADMIN_TOKEN の不一致で、Access の JWT 切れ（middleware の 401）と区別できるよう 502 にする。 */
 export async function passThrough(res: Response, extraHeaders?: Record<string, string>): Promise<Response> {
-  if (res.status === 204) return new Response(null, { status: 204, headers: extraHeaders });
-  if (res.status === 401 || res.status === 403) return json({ error: "the API rejected ADMIN_TOKEN" }, 502);
-  if (!(res.headers.get("Content-Type") ?? "").includes("json")) return json({ error: `the API returned ${res.status}` }, res.status >= 400 ? res.status : 502);
-  const headers = new Headers({ "Content-Type": "application/json" });
+  const headers = new Headers();
+  const bump = res.headers.get("X-Api-Cache-Bump");
+  if (bump) headers.set("X-Api-Cache-Bump", bump);
   if (extraHeaders) {
     for (const [k, v] of Object.entries(extraHeaders)) headers.set(k, v);
   }
+  if (res.status === 204) return new Response(null, { status: 204, headers });
+  if (res.status === 401 || res.status === 403) return json({ error: "the API rejected ADMIN_TOKEN" }, 502);
+  if (!(res.headers.get("Content-Type") ?? "").includes("json")) return json({ error: `the API returned ${res.status}` }, res.status >= 400 ? res.status : 502);
+  headers.set("Content-Type", "application/json");
   return new Response(await res.text(), { status: res.status, headers });
 }
 
