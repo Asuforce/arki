@@ -10,8 +10,9 @@ const slug = Astro.params.slug;
 const post = slug ? await getPost(slug) : null;
 if (!post) return new Response("Not Found", { status: 404 });
 
+const isAdmin = Boolean(Astro.locals.isAdmin);
 const html = await expandLinkCards(renderPost(post.content));
-Astro.response.headers.set("Cache-Control", PUBLIC_CACHE_CONTROL);
+Astro.response.headers.set("Cache-Control", isAdmin ? "private, no-store" : PUBLIC_CACHE_CONTROL);
 ---
 
 <Layout title={post.title} description={post.excerpt} type="article">
@@ -30,7 +31,7 @@ Astro.response.headers.set("Cache-Control", PUBLIC_CACHE_CONTROL);
             </span>
           )
         }
-        <a class="edit-link" data-admin-only lang="en" href={`/admin/edit/${post.id}`} hidden>Edit</a>
+        {isAdmin && <a class="edit-link" lang="en" href={`/admin/edit/${post.id}`}>Edit</a>}
       </p>
     </header>
     <div class="post-body" set:html={html} />

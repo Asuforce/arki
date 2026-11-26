@@ -12,7 +12,7 @@ export interface PurgeTarget {
 
 /** 記事の作成・更新・削除で影響を受ける公開パスの一覧を作る。 */
 export function postPurgePaths(targets: PurgeTarget[]): string[] {
-  const paths = new Set<string>(["/", "/category", "/archive", "/rss.xml"]);
+  const paths = new Set<string>(["/", "/category", "/archive", "/rss.xml", "/sitemap.xml"]);
   for (const t of targets) {
     if (t.slug) {
       const encodedSlug = t.slug

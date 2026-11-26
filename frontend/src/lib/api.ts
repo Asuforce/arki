@@ -1,3 +1,5 @@
+import type { SitemapEntry } from "./sitemap";
+
 export interface PostSummary {
   id: number;
   slug: string;
@@ -66,4 +68,9 @@ export interface MonthCount {
 export async function listArchive(): Promise<MonthCount[]> {
   const res = await get<{ months: MonthCount[] }>("/api/archive");
   return res?.months ?? [];
+}
+
+export async function listSitemapEntries(): Promise<SitemapEntry[]> {
+  const res = await get<{ posts: SitemapEntry[] }>("/api/sitemap");
+  return res?.posts ?? [];
 }

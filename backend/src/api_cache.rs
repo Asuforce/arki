@@ -22,8 +22,10 @@ pub(crate) fn is_cacheable_route(method: &Method, path: &str, authenticated: boo
     if authenticated || *method != Method::Get {
         return false;
     }
-    matches!(path, "/api/posts" | "/api/categories" | "/api/archive")
-        || path.starts_with("/api/posts/by-slug/")
+    matches!(
+        path,
+        "/api/posts" | "/api/categories" | "/api/archive" | "/api/sitemap"
+    ) || path.starts_with("/api/posts/by-slug/")
 }
 
 /// バージョン番号と URL（パス＋クエリ）から内部 Cache API 用のキーを作る。
@@ -93,6 +95,7 @@ mod tests {
         assert!(is_cacheable_route(&Method::Get, "/api/posts", false));
         assert!(is_cacheable_route(&Method::Get, "/api/categories", false));
         assert!(is_cacheable_route(&Method::Get, "/api/archive", false));
+        assert!(is_cacheable_route(&Method::Get, "/api/sitemap", false));
         assert!(is_cacheable_route(
             &Method::Get,
             "/api/posts/by-slug/2026/01/01/000000",

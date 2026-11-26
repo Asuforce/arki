@@ -78,6 +78,7 @@ test("postPurgePaths: 一覧・記事・カテゴリ・JST 月別パスを重複
     "/category/tech",
     "/entry/2026/01/01/010000",
     "/rss.xml",
+    "/sitemap.xml",
   ]);
 });
 

@@ -547,6 +547,25 @@ async fn list_archive(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     Response::from_json(&json!({ "months": months }))
 }
 
+/// サイトマップ用の公開記事一覧（slug と updated_at のみ）。
+async fn list_sitemap(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    #[derive(Serialize, Deserialize)]
+    struct SitemapEntry {
+        slug: String,
+        updated_at: String,
+    }
+    let d1 = ctx.env.d1("DB")?;
+    let posts: Vec<SitemapEntry> = d1
+        .prepare(
+            "SELECT slug, updated_at FROM posts WHERE status = 'published' \
+             ORDER BY published_at DESC, id DESC",
+        )
+        .all()
+        .await?
+        .results()?;
+    Response::from_json(&json!({ "posts": posts }))
+}
+
 /// `base` が空いていればそれを、使われていれば `base_1`、`base_2` … を返す。`exclude_id` の記事自身は衝突とみなさない。
 async fn unique_slug(
     d1: &D1Database,
@@ -878,6 +897,7 @@ pub async fn main(req: Request, env: Env, ctx: worker::Context) -> Result<Respon
         .get_async("/api/posts/:id", get_post_by_id)
         .get_async("/api/categories", list_categories)
         .get_async("/api/archive", list_archive)
+        .get_async("/api/sitemap", list_sitemap)
         .post_async("/api/posts", create_post)
         .put_async("/api/posts/:id", update_post)
         .post_async("/api/posts/:id/classify", tier_api::classify_post)
