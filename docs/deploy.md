@@ -42,6 +42,8 @@ API の Worker は R2 のバケット `arki-images`（バインディング `IMA
 | `ACCESS_AUD` | Access アプリの AUD タグ |
 | `ACCESS_TEAM_DOMAIN` | Access のチームドメイン（例: `<team>.cloudflareaccess.com`） |
 | `ADMIN_EMAIL` | 入れるメールアドレス。JWT の `email` がこれと違えば、Access のポリシーが緩んでも通さない |
+| `CF_ZONE_ID` | （任意）記事の保存・削除時に Cloudflare Zone Cache を URL 指定で purge するゾーン ID |
+| `CF_PURGE_TOKEN` | （任意）Zone Cache Purge 権限を持つ API トークン。未設定時は自 POP の Cache API のみ削除する |
 
 ```bash
 cd frontend

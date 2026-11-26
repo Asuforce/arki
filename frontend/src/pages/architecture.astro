@@ -1,7 +1,8 @@
 ---
 import Layout from "../layouts/Layout.astro";
+import { PUBLIC_CACHE_CONTROL } from "../lib/edge-cache";
 
-Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
+Astro.response.headers.set("Cache-Control", PUBLIC_CACHE_CONTROL);
 ---
 
 <Layout title="Architecture" description="arki のシステム構成を C4 モデルで示した図">

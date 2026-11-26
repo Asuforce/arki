@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { listPosts } from "../lib/api";
+import { RSS_CACHE_CONTROL } from "../lib/edge-cache";
 import { siteTitle } from "../lib/site";
 import { escapeXml } from "../lib/xml";
 
@@ -28,6 +29,6 @@ ${items}
 </rss>
 `;
   return new Response(xml, {
-    headers: { "Content-Type": "application/rss+xml; charset=utf-8", "Cache-Control": "public, max-age=300" },
+    headers: { "Content-Type": "application/rss+xml; charset=utf-8", "Cache-Control": RSS_CACHE_CONTROL },
   });
 };

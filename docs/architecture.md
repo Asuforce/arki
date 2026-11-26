@@ -73,7 +73,22 @@ flowchart LR
 | `/sitemap.xml` | 公開記事のサイトマップ（`lastmod` 付き） |
 | `/robots.txt` | クローラ向けの制御とサイトマップ案内 |
 
-公開ページの応答には `Cache-Control: public, max-age=60, s-maxage=600` を付けます（`/sitemap.xml` と `/robots.txt` は `public, max-age=300, s-maxage=3600`、`/rss.xml` は `public, max-age=300`）。Worker の応答は `s-maxage` だけではエッジに残らないので、`middleware.ts` が `lib/edge-cache.ts` で Cache API（`caches.default`、キーは URL とクエリ）に入れます。入れるのは `/admin*` 以外の、成功した GET で、`public` と `s-maxage` があり、`Set-Cookie` が無い応答だけです。`Authorization` つきの要求は通しません。キャッシュから返した応答には `X-Edge-Cache: HIT` を付けます。Cache API の中身は、入れたデータセンターの中だけに残ります。独自ドメインでないと効きません。記事を更新しても、最長 10 分は古い表示が残ります。
+公開ページの応答には `Cache-Control: public, max-age=60, s-maxage=86400, stale-while-revalidate=86400`（`/page/N`、クエリ付きの一覧、`/search` は個別 URL での purge 対象から外れるため `s-maxage=300, stale-while-revalidate=300`、`/sitemap.xml` と `/robots.txt` は `public, max-age=300, s-maxage=3600`、`/rss.xml` は `public, max-age=300, s-maxage=3600, stale-while-revalidate=3600`）を付けます。Worker の応答は `s-maxage` だけではエッジに残らないので、`middleware.ts` が `lib/edge-cache.ts` で Cache API（`caches.default`、キーは URL とクエリ）に入れます。入れるのは `/admin*` 以外の、成功した GET で、`public` と `s-maxage` があり、`Set-Cookie` が無い応答だけです。`Authorization` つきの要求は通しません。キャッシュから返した応答には `X-Edge-Cache: HIT` を付けます。
+
+管理画面で記事を作成・更新・削除・公開切り替えしたときは、`lib/admin-purge.ts`（`lib/admin-http.ts`）が自 POP の Cache API（`/`, `/category`, `/archive`, `/rss.xml`, `/sitemap.xml`, 該当 `/entry/<slug>`, `/category/<name>`, `/archive/<yyyy>/<m>`）を削除します。`CF_ZONE_ID` と `CF_PURGE_TOKEN` が設定されている場合は Cloudflare Zone Purge API も同時に呼び出し、フロント側と `PUBLIC_API_URL` 側（`/api/posts?...`, `/api/categories`, `/api/archive`, `/api/sitemap`, `/api/posts/by-slug/*`）の全 POP キャッシュを消します。
+
+API の Worker（`backend/src/api_cache.rs`）も、認証なしの公開 GET（`/api/posts`, `/api/categories`, `/api/archive`, `/api/sitemap`, `/api/posts/by-slug/*`）を Cache API に保存します。キーには D1 の `cache_meta` テーブルで持つバージョン番号（`api_cache_version`）を含め、記事の作成・更新・削除時にバージョンを上げて一括無効化します。外向きには `Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=300` と `Vary: Origin, Authorization`（ヒット時は `X-Api-Cache: HIT`、ミス時は `MISS`）を返し、ゾーンキャッシュ（Cache Rules で `Authorization` ヘッダーなしのみ対象 + Smart Tiered Cache）を前段に置いた場合でも POP 間の巡回を吸収しつつ最大 5 分で最新化されます。
+
+```mermaid
+flowchart LR
+  B[ブラウザ / クローラ] -->|"HTML GET"| Z1[ゾーンキャッシュ<br/>Tiered Cache]
+  Z1 -->|"MISS"| F[フロント Worker<br/>Cache API: 1日 + SWR]
+  F -->|"API GET (SSR)"| Z2[blog-api ゾーンキャッシュ<br/>Cache Rules: 5分 + SWR]
+  Z2 -->|"MISS"| P[API Worker<br/>Cache API: vN キー]
+  P -->|"MISS"| D[(D1)]
+  A[管理画面での保存・削除] -->|"vN を +1"| D
+  A -->|"該当 URL を purge"| F
+```
 
 ## 本文の表示
 
