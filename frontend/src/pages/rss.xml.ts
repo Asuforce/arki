@@ -1,9 +1,7 @@
 import type { APIRoute } from "astro";
 import { listPosts } from "../lib/api";
 import { siteTitle } from "../lib/site";
-
-const escapeXml = (s: string): string =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+import { escapeXml } from "../lib/xml";
 
 export const GET: APIRoute = async ({ url }) => {
   const origin = url.origin;

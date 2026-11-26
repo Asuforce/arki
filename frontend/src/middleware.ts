@@ -1,6 +1,7 @@
 import { defineMiddleware } from "astro:middleware";
-import { AccessUnavailableError, verifyAccessJwt } from "./lib/access";
+import { verifyAccessJwt, AccessUnavailableError } from "./lib/access";
 import { devBypass, loadAccessConfig } from "./lib/access-config";
+import { isAdminRequest } from "./lib/admin-auth";
 import { loadAdminApi } from "./lib/admin-config";
 import { withEdgeCache, type EdgeCache } from "./lib/edge-cache";
 
@@ -8,6 +9,7 @@ declare global {
   namespace App {
     interface Locals {
       adminEmail?: string;
+      isAdmin?: boolean;
     }
   }
 }
@@ -31,6 +33,14 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const { request, url } = context;
   if (isUnusedFrameworkPath(url.pathname)) return text(404, "Not Found");
   if (!isAdminPath(url.pathname)) {
+    const admin = await isAdminRequest(request);
+    context.locals.isAdmin = admin;
+    if (admin) {
+      // 管理者向けの応答には /admin や /admin/edit/* リンクを含めるため、共有キャッシュに入れない
+      const response = await next();
+      response.headers.set("Cache-Control", "private, no-store");
+      return response;
+    }
     // 認証つきの要求は、共有キャッシュに入れも、出しもしない
     const cache = request.headers.has("Authorization") ? undefined : (globalThis as { caches?: { default?: EdgeCache } }).caches?.default;
     const cfContext = (context.locals as { cfContext?: { waitUntil(p: Promise<unknown>): void } }).cfContext;
