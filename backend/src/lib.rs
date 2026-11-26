@@ -869,7 +869,7 @@ fn with_cors(mut response: Response, env: &Env) -> Result<Response> {
         "Access-Control-Allow-Headers",
         "Content-Type, Authorization",
     )?;
-    headers.set("Vary", "Origin")?;
+    headers.set("Vary", "Origin, Authorization")?;
     Ok(response)
 }
 
@@ -880,13 +880,16 @@ pub async fn main(req: Request, env: Env, ctx: worker::Context) -> Result<Respon
     let url = req.url()?;
     let cache_key = if api_cache::is_cacheable_route(&req.method(), url.path(), authenticated) {
         let d1 = env.d1("DB")?;
-        let version = api_cache::read_version(&d1).await;
-        let key = api_cache::cache_key(&version, &url);
-        if let Ok(Some(cached)) = Cache::default().get(&key, false).await {
-            let hit = api_cache::hit_response(cached).await?;
-            return with_cors(hit, &env);
+        if let Some(version) = api_cache::read_version(&d1).await {
+            let key = api_cache::cache_key(&version, &url);
+            if let Ok(Some(cached)) = Cache::default().get(&key, false).await {
+                let hit = api_cache::hit_response(cached).await?;
+                return with_cors(hit, &env);
+            }
+            Some(key)
+        } else {
+            None
         }
-        Some(key)
     } else {
         None
     };

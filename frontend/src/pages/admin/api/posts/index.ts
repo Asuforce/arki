@@ -6,22 +6,24 @@ interface PostBody {
   published_at?: unknown;
 }
 
-export const POST: APIRoute = async ({ request, url, locals }) => {
+export const POST: APIRoute = async ({ request, url }) => {
   const raw = await request.text();
   const api = adminApi();
   const res = await api.send("POST", "/api/posts", raw, { "Content-Type": "application/json" });
-  let extraHeaders: Record<string, string> | undefined;
+  const warnings: string[] = [];
   if (res.status === 201) {
     const created = await safeResponseJson<{ id?: number; slug?: string }>(res);
     const fetched = typeof created?.id === "number" ? await fetchPurgeTarget(api, created.id) : { failed: false };
-    if (fetched.failed) extraHeaders = { "X-Cache-Purge-Warning": "after-fetch-failed" };
+    if (fetched.failed) warnings.push("after-fetch-failed");
     const input = safeJson<PostBody>(raw);
     const target = fetched.target ?? {
       slug: created?.slug,
       categories: Array.isArray(input?.categories) ? input.categories.filter((c): c is string => typeof c === "string") : [],
       published_at: typeof input?.published_at === "string" ? input.published_at : undefined,
     };
-    await purgePostCache({ url, locals }, [target]);
+    const purged = await purgePostCache({ url }, [target]);
+    if (!purged) warnings.push("purge-failed");
   }
+  const extraHeaders = warnings.length > 0 ? { "X-Cache-Purge-Warning": warnings.join(", ") } : undefined;
   return passThrough(res, extraHeaders);
 };

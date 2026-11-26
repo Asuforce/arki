@@ -37,8 +37,9 @@ pub(crate) fn cache_key(version: &str, url: &Url) -> String {
     format!("https://arki-cache.internal/v{version}{path_and_query}")
 }
 
-/// D1 から現在のキャッシュバージョンを読む。未初期化でも `"1"` にフォールバックする。
-pub(crate) async fn read_version(d1: &D1Database) -> String {
+/// D1 から現在のキャッシュバージョンを読む。
+/// 未初期化（行なし）なら `"1"`、読み取りエラー時は古いキャッシュの誤返却を防ぐため `None`（バイパス）を返す。
+pub(crate) async fn read_version(d1: &D1Database) -> Option<String> {
     let row: Result<Option<ValueRow>> = d1
         .prepare("SELECT value FROM cache_meta WHERE key = ?")
         .bind(&[VERSION_KEY.into()])
@@ -46,11 +47,11 @@ pub(crate) async fn read_version(d1: &D1Database) -> String {
         .first(None)
         .await;
     match row {
-        Ok(Some(r)) => r.value,
-        Ok(None) => "1".to_string(),
+        Ok(Some(r)) => Some(r.value),
+        Ok(None) => Some("1".to_string()),
         Err(e) => {
             console_error!("cache_meta read failed: {e}");
-            "1".to_string()
+            None
         }
     }
 }

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { isCacheable, withEdgeCache, type EdgeCache } from "../src/lib/edge-cache.ts";
-import { postPurgePaths, purgePaths } from "../src/lib/admin-purge.ts";
+import { apiPurgePaths, postPurgePaths, purgePaths } from "../src/lib/admin-purge.ts";
 
 const pub = "public, max-age=60, s-maxage=86400, stale-while-revalidate=86400";
 const get = (url = "https://x.test/search?q=a", init: RequestInit = {}) => new Request(url, init);
@@ -57,16 +57,16 @@ test("withEdgeCache: キャッシュや waitUntil が無ければ render だけ"
   assert.equal(calls, 1);
 });
 
-test("postPurgePaths: 一覧・記事・カテゴリ・JST 月別パスを重複なく作る", () => {
+test("postPurgePaths: 一覧・記事・カテゴリ・JST 月別パスを重複なく作り、カテゴリは trim する", () => {
   const paths = postPurgePaths([
     {
       slug: "2026/01/01/010000",
-      categories: ["日記", "tech"],
+      categories: [" 日記 ", "tech"],
       published_at: "2025-12-31T16:00:00Z", // JST で 2026-01-01 01:00
     },
     {
       slug: "2026/01/01/010000",
-      categories: ["tech"],
+      categories: ["tech", "  "],
     },
   ]);
   assert.deepEqual(paths.sort(), [
@@ -82,6 +82,25 @@ test("postPurgePaths: 一覧・記事・カテゴリ・JST 月別パスを重複
   ]);
 });
 
+test("apiPurgePaths: SSR と一致する API パスを生成する", () => {
+  const paths = apiPurgePaths([
+    {
+      slug: "2026/01/01/010000",
+      categories: [" tech "],
+      published_at: "2025-12-31T16:00:00Z",
+    },
+  ]);
+  assert.deepEqual(paths.sort(), [
+    "/api/archive",
+    "/api/categories",
+    "/api/posts/by-slug/2026/01/01/010000",
+    "/api/posts?page=1&limit=20",
+    "/api/posts?page=1&limit=20&category=tech",
+    "/api/posts?page=1&limit=50&month=2026-01",
+    "/api/sitemap",
+  ]);
+});
+
 test("purgePaths: Cache API の delete と Zone Purge API の両方を呼ぶ", async () => {
   const cache = memory();
   await cache.put("https://x.test/", res(pub));
@@ -93,10 +112,18 @@ test("purgePaths: Cache API の delete と Zone Purge API の両方を呼ぶ", a
     return new Response(JSON.stringify({ success: true }), { status: 200 });
   };
 
-  await purgePaths("https://x.test", ["/", "/entry/a"], cache, { zoneId: "z1", token: "t1" }, fakeFetch);
+  const ok = await purgePaths("https://x.test", ["/", "/entry/a"], cache, { zoneId: "z1", token: "t1" }, fakeFetch);
+  assert.equal(ok, true);
   assert.equal(cache.store.has("https://x.test/"), false);
   assert.equal(cache.store.has("https://x.test/other"), true);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "https://api.cloudflare.com/client/v4/zones/z1/purge_cache");
   assert.deepEqual(JSON.parse(calls[0].body), { files: ["https://x.test/", "https://x.test/entry/a"] });
+});
+
+test("purgePaths: Zone Purge API が失敗したときは false を返す", async () => {
+  const failStatus: typeof fetch = async () => new Response(JSON.stringify({ success: false }), { status: 403 });
+  const failBody: typeof fetch = async () => new Response(JSON.stringify({ success: false }), { status: 200 });
+  assert.equal(await purgePaths("https://x.test", ["/"], undefined, { zoneId: "z1", token: "t1" }, failStatus), false);
+  assert.equal(await purgePaths("https://x.test", ["/"], undefined, { zoneId: "z1", token: "t1" }, failBody), false);
 });

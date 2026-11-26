@@ -11,7 +11,7 @@ export const GET: APIRoute = async ({ params }) => {
   return passThrough(await adminApi().send("GET", `/api/posts/${id}`));
 };
 
-export const PUT: APIRoute = async ({ params, request, url, locals }) => {
+export const PUT: APIRoute = async ({ params, request, url }) => {
   const id = postId(params.id);
   if (id === null) return json({ error: "id must be a number" }, 400);
   const api = adminApi();
@@ -34,21 +34,25 @@ export const PUT: APIRoute = async ({ params, request, url, locals }) => {
       ...(before.target ? [before.target] : []),
       after.target ?? fallbackAfter,
     ];
-    await purgePostCache({ url, locals }, targets);
+    const purged = await purgePostCache({ url }, targets);
+    if (!purged) warnings.push("purge-failed");
   }
   const extraHeaders = warnings.length > 0 ? { "X-Cache-Purge-Warning": warnings.join(", ") } : undefined;
   return passThrough(res, extraHeaders);
 };
 
-export const DELETE: APIRoute = async ({ params, url, locals }) => {
+export const DELETE: APIRoute = async ({ params, url }) => {
   const id = postId(params.id);
   if (id === null) return json({ error: "id must be a number" }, 400);
   const api = adminApi();
   const before = await fetchPurgeTarget(api, id);
   const res = await api.send("DELETE", `/api/posts/${id}`);
+  const warnings: string[] = [];
+  if (before.failed) warnings.push("before-fetch-failed");
   if (res.status === 204) {
-    await purgePostCache({ url, locals }, before.target ? [before.target] : []);
+    const purged = await purgePostCache({ url }, before.target ? [before.target] : []);
+    if (!purged) warnings.push("purge-failed");
   }
-  const extraHeaders = before.failed ? { "X-Cache-Purge-Warning": "before-fetch-failed" } : undefined;
+  const extraHeaders = warnings.length > 0 ? { "X-Cache-Purge-Warning": warnings.join(", ") } : undefined;
   return passThrough(res, extraHeaders);
 };

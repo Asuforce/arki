@@ -1,7 +1,7 @@
 import type { APIContext } from "astro";
 import type { AdminApi } from "./admin-api";
 import { loadAdminApi, loadZonePurgeConfig } from "./admin-config";
-import { postPurgePaths, purgePaths, type PurgeTarget } from "./admin-purge";
+import { apiPurgePaths, postPurgePaths, purgePaths, type PurgeTarget } from "./admin-purge";
 import type { EdgeCache } from "./edge-cache";
 
 export function json(body: unknown, status = 200): Response {
@@ -60,18 +60,17 @@ export async function fetchPurgeTarget(
   }
 }
 
-/** 投稿の作成・更新・削除後に該当 URL のエッジキャッシュを無効化する。 */
-export async function purgePostCache(context: Pick<APIContext, "url" | "locals">, targets: PurgeTarget[]): Promise<void> {
+/** 投稿の作成・更新・削除後に該当 URL のエッジキャッシュ（フロントと Zone 設定時は API 側も）を無効化する。 */
+export async function purgePostCache(context: Pick<APIContext, "url">, targets: PurgeTarget[]): Promise<boolean> {
   const cache = (globalThis as { caches?: { default?: EdgeCache } }).caches?.default;
   const zone = loadZonePurgeConfig();
-  if (!cache?.delete && !zone) return;
+  if (!cache?.delete && !zone) return true;
 
-  const paths = postPurgePaths(targets);
-  const task = purgePaths(context.url.origin, paths, cache, zone);
-  const cfContext = (context.locals as { cfContext?: { waitUntil(p: Promise<unknown>): void } }).cfContext;
-  if (cfContext) {
-    cfContext.waitUntil(task);
-  } else {
-    await task;
+  const tasks: Promise<boolean>[] = [purgePaths(context.url.origin, postPurgePaths(targets), cache, zone)];
+  const apiUrl = import.meta.env.PUBLIC_API_URL;
+  if (zone && apiUrl) {
+    tasks.push(purgePaths(apiUrl, apiPurgePaths(targets), undefined, zone));
   }
+  const results = await Promise.all(tasks);
+  return results.every(Boolean);
 }
