@@ -1,6 +1,7 @@
 /** Worker の応答は、`s-maxage` を付けるだけではエッジに残らない。Cache API に自分で入れる。 */
 
 export const PUBLIC_CACHE_CONTROL = "public, max-age=60, s-maxage=86400, stale-while-revalidate=86400";
+export const LIST_PAGE_CACHE_CONTROL = "public, max-age=60, s-maxage=300, stale-while-revalidate=300";
 export const RSS_CACHE_CONTROL = "public, max-age=300, s-maxage=3600, stale-while-revalidate=3600";
 
 export interface EdgeCache {

@@ -693,9 +693,10 @@ async fn create_post(mut req: Request, ctx: RouteContext<()>) -> Result<Response
         .first(None)
         .await?;
     let id = created.map(|r| r.id).unwrap_or(0);
-    api_cache::bump_version(&d1).await;
-    Response::from_json(&json!({ "id": id, "slug": slug, "updated_at": now }))
-        .map(|r| r.with_status(201))
+    let mut res =
+        Response::from_json(&json!({ "id": id, "slug": slug, "updated_at": now }))?.with_status(201);
+    api_cache::bump_version(&d1, &mut res).await;
+    Ok(res)
 }
 
 async fn update_post(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -816,8 +817,9 @@ async fn update_post(mut req: Request, ctx: RouteContext<()>) -> Result<Response
         return update_conflict(latest.map(|p| p.updated_at));
     }
 
-    api_cache::bump_version(&d1).await;
-    Response::from_json(&json!({ "id": id, "slug": slug, "updated_at": updated_at }))
+    let mut res = Response::from_json(&json!({ "id": id, "slug": slug, "updated_at": updated_at }))?;
+    api_cache::bump_version(&d1, &mut res).await;
+    Ok(res)
 }
 
 async fn delete_post(req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -843,8 +845,9 @@ async fn delete_post(req: Request, ctx: RouteContext<()>) -> Result<Response> {
             .bind(&[num(id)])?,
     ])
     .await?;
-    api_cache::bump_version(&d1).await;
-    Ok(Response::empty()?.with_status(204))
+    let mut res = Response::empty()?.with_status(204);
+    api_cache::bump_version(&d1, &mut res).await;
+    Ok(res)
 }
 
 // ---- エントリポイント --------------------------------------------------

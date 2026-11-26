@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { adminApi, json, passThrough, purgePostCache } from "../../../../../lib/admin-http";
+import { adminApi, fetchPurgeTarget, json, passThrough, purgePostCache } from "../../../../../lib/admin-http";
 
 /** 一覧からの切り替え。API の PUT は title と content が要るので、読んでから書く。 */
 export const POST: APIRoute = async ({ params, request, url, locals }) => {
@@ -17,15 +17,18 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
     JSON.stringify({ title: post.title, content: post.content, status: body.status, expected_updated_at: expected }),
     { "Content-Type": "application/json" },
   );
+  let extraHeaders: Record<string, string> | undefined;
   if (res.status === 200) {
+    const after = await fetchPurgeTarget(api, id);
+    if (after.failed) extraHeaders = { "X-Cache-Purge-Warning": "after-fetch-failed" };
     const updated = await res
       .clone()
       .json()
       .catch(() => null) as { slug?: string } | null;
     await purgePostCache({ url, locals }, [
       { slug: post.slug, categories: post.categories, published_at: post.published_at },
-      ...(updated?.slug && updated.slug !== post.slug ? [{ slug: updated.slug }] : []),
+      after.target ?? { slug: updated?.slug ?? post.slug },
     ]);
   }
-  return passThrough(res);
+  return passThrough(res, extraHeaders);
 };

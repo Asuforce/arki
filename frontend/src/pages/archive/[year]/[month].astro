@@ -4,7 +4,7 @@ import Pagination from "../../../components/Pagination.astro";
 import Layout from "../../../layouts/Layout.astro";
 import { listArchive, listPosts } from "../../../lib/api";
 import { parseMonth } from "../../../lib/archive";
-import { PUBLIC_CACHE_CONTROL } from "../../../lib/edge-cache";
+import { LIST_PAGE_CACHE_CONTROL, PUBLIC_CACHE_CONTROL } from "../../../lib/edge-cache";
 
 const month = parseMonth(Astro.params.year, Astro.params.month);
 if (!month) return new Response("Not Found", { status: 404 });
@@ -16,7 +16,8 @@ const [{ posts, page, limit, total }, archive] = await Promise.all([
   listArchive().catch(() => []),
 ]);
 if (total === 0) return new Response("Not Found", { status: 404 });
-Astro.response.headers.set("Cache-Control", PUBLIC_CACHE_CONTROL);
+const cacheControl = Astro.url.searchParams.size > 0 ? LIST_PAGE_CACHE_CONTROL : PUBLIC_CACHE_CONTROL;
+Astro.response.headers.set("Cache-Control", cacheControl);
 
 // 記事のある月だけをたどる。archive は新しい月から並ぶので、newer が前、older が後ろ
 const months = archive.map((a) => a.month);

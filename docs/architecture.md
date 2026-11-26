@@ -73,7 +73,7 @@ flowchart LR
 | `/sitemap.xml` | 公開記事のサイトマップ（`lastmod` 付き） |
 | `/robots.txt` | クローラ向けの制御とサイトマップ案内 |
 
-公開ページの応答には `Cache-Control: public, max-age=60, s-maxage=86400, stale-while-revalidate=86400`（`/sitemap.xml` と `/robots.txt` は `public, max-age=300, s-maxage=3600`、`/rss.xml` は `public, max-age=300, s-maxage=3600, stale-while-revalidate=3600`）を付けます。Worker の応答は `s-maxage` だけではエッジに残らないので、`middleware.ts` が `lib/edge-cache.ts` で Cache API（`caches.default`、キーは URL とクエリ）に入れます。入れるのは `/admin*` 以外の、成功した GET で、`public` と `s-maxage` があり、`Set-Cookie` が無い応答だけです。`Authorization` つきの要求は通しません。キャッシュから返した応答には `X-Edge-Cache: HIT` を付けます。
+公開ページの応答には `Cache-Control: public, max-age=60, s-maxage=86400, stale-while-revalidate=86400`（`/page/N`、クエリ付きの一覧、`/search` は個別 URL での purge 対象から外れるため `s-maxage=300, stale-while-revalidate=300`、`/sitemap.xml` と `/robots.txt` は `public, max-age=300, s-maxage=3600`、`/rss.xml` は `public, max-age=300, s-maxage=3600, stale-while-revalidate=3600`）を付けます。Worker の応答は `s-maxage` だけではエッジに残らないので、`middleware.ts` が `lib/edge-cache.ts` で Cache API（`caches.default`、キーは URL とクエリ）に入れます。入れるのは `/admin*` 以外の、成功した GET で、`public` と `s-maxage` があり、`Set-Cookie` が無い応答だけです。`Authorization` つきの要求は通しません。キャッシュから返した応答には `X-Edge-Cache: HIT` を付けます。
 
 管理画面で記事を作成・更新・削除・公開切り替えしたときは、`lib/admin-purge.ts`（`lib/admin-http.ts`）が自 POP の Cache API（`/`, `/category`, `/archive`, `/rss.xml`, `/sitemap.xml`, 該当 `/entry/<slug>`, `/category/<name>`, `/archive/<yyyy>/<m>`）を削除します。`CF_ZONE_ID` と `CF_PURGE_TOKEN` が設定されている場合は Cloudflare Zone Purge API も同時に呼び出し、全 POP のキャッシュを消します。
 

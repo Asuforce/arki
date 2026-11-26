@@ -56,7 +56,8 @@ pub(crate) async fn read_version(d1: &D1Database) -> String {
 }
 
 /// 投稿の作成・更新・削除時にバージョンを上げ、古いキャッシュを一括無効化する。
-pub(crate) async fn bump_version(d1: &D1Database) {
+/// 失敗時は `console_error!` に加え、応答ヘッダー `X-Api-Cache-Bump: failed` で運用側へ知らせる。
+pub(crate) async fn bump_version(d1: &D1Database, response: &mut Response) {
     let stmt = match d1
         .prepare(
             "INSERT INTO cache_meta (key, value) VALUES (?, '2') \
@@ -67,11 +68,13 @@ pub(crate) async fn bump_version(d1: &D1Database) {
         Ok(s) => s,
         Err(e) => {
             console_error!("cache_meta prepare failed: {e}");
+            let _ = response.headers_mut().set("X-Api-Cache-Bump", "failed");
             return;
         }
     };
     if let Err(e) = stmt.run().await {
         console_error!("cache_meta bump failed: {e}");
+        let _ = response.headers_mut().set("X-Api-Cache-Bump", "failed");
     }
 }
 
