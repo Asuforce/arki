@@ -2,9 +2,10 @@
 import Layout from "../../layouts/Layout.astro";
 import { listArchive } from "../../lib/api";
 import { groupByYear } from "../../lib/archive";
+import { PUBLIC_CACHE_CONTROL } from "../../lib/edge-cache";
 
 const years = groupByYear(await listArchive());
-Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
+Astro.response.headers.set("Cache-Control", PUBLIC_CACHE_CONTROL);
 ---
 
 <Layout title="Archive">

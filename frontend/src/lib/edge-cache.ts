@@ -1,8 +1,12 @@
 /** Worker の応答は、`s-maxage` を付けるだけではエッジに残らない。Cache API に自分で入れる。 */
 
+export const PUBLIC_CACHE_CONTROL = "public, max-age=60, s-maxage=86400, stale-while-revalidate=86400";
+export const RSS_CACHE_CONTROL = "public, max-age=300, s-maxage=3600, stale-while-revalidate=3600";
+
 export interface EdgeCache {
   match(key: string): Promise<Response | undefined>;
   put(key: string, response: Response): Promise<void>;
+  delete?(key: string): Promise<boolean>;
 }
 
 /** 公開してよい応答だけ入れる。成功した GET で、共有キャッシュ向けの指定があり、クッキーを設定しないもの。 */

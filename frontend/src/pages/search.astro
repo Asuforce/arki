@@ -3,13 +3,14 @@ import PostList from "../components/PostList.astro";
 import Pagination from "../components/Pagination.astro";
 import Layout from "../layouts/Layout.astro";
 import { listPosts } from "../lib/api";
+import { PUBLIC_CACHE_CONTROL } from "../lib/edge-cache";
 
 const q = (Astro.url.searchParams.get("q") ?? "").trim().slice(0, 100);
 const requested = Number(Astro.url.searchParams.get("page") ?? "1");
 const n = Number.isInteger(requested) && requested >= 1 ? requested : 1;
 
 const result = q ? await listPosts({ page: n, q }) : null;
-Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
+Astro.response.headers.set("Cache-Control", PUBLIC_CACHE_CONTROL);
 ---
 
 <Layout title={q ? `${q} の検索結果` : "Search"}>

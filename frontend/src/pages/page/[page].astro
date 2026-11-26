@@ -3,6 +3,7 @@ import PostList from "../../components/PostList.astro";
 import Pagination from "../../components/Pagination.astro";
 import Layout from "../../layouts/Layout.astro";
 import { listPosts } from "../../lib/api";
+import { PUBLIC_CACHE_CONTROL } from "../../lib/edge-cache";
 
 const n = Number(Astro.params.page);
 if (!Number.isInteger(n) || n < 1) return new Response("Not Found", { status: 404 });
@@ -10,7 +11,7 @@ if (n === 1) return Astro.redirect("/", 301);
 
 const { posts, page, limit, total } = await listPosts({ page: n });
 if (posts.length === 0) return new Response("Not Found", { status: 404 });
-Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
+Astro.response.headers.set("Cache-Control", PUBLIC_CACHE_CONTROL);
 ---
 
 <Layout title={`Page ${page}`}>

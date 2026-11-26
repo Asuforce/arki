@@ -16,6 +16,8 @@ export default defineConfig({
       ACCESS_TEAM_DOMAIN: envField.string({ context: "server", access: "secret", optional: true }),
       ADMIN_EMAIL: envField.string({ context: "server", access: "secret", optional: true }),
       ADMIN_DEV_BYPASS: envField.string({ context: "server", access: "secret", optional: true }),
+      CF_ZONE_ID: envField.string({ context: "server", access: "secret", optional: true }),
+      CF_PURGE_TOKEN: envField.string({ context: "server", access: "secret", optional: true }),
     },
   },
 });

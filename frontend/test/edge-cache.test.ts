@@ -1,14 +1,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { isCacheable, withEdgeCache, type EdgeCache } from "../src/lib/edge-cache.ts";
+import { postPurgePaths, purgePaths } from "../src/lib/admin-purge.ts";
 
-const pub = "public, max-age=60, s-maxage=600";
+const pub = "public, max-age=60, s-maxage=86400, stale-while-revalidate=86400";
 const get = (url = "https://x.test/search?q=a", init: RequestInit = {}) => new Request(url, init);
 const res = (cc: string | null, init: ResponseInit = {}) => new Response("ok", { ...init, headers: cc ? { "Cache-Control": cc, ...(init.headers as object) } : init.headers });
 
 function memory(): EdgeCache & { store: Map<string, Response> } {
   const store = new Map<string, Response>();
-  return { store, match: async (k) => store.get(k)?.clone(), put: async (k, r) => void store.set(k, r) };
+  return {
+    store,
+    match: async (k) => store.get(k)?.clone(),
+    put: async (k, r) => void store.set(k, r),
+    delete: async (k) => store.delete(k),
+  };
 }
 
 test("isCacheable: public + s-maxage の 200 GET だけ", () => {
@@ -49,4 +55,47 @@ test("withEdgeCache: キャッシュや waitUntil が無ければ render だけ"
   let calls = 0;
   await withEdgeCache(get(), undefined, undefined, async () => (calls++, res(pub)));
   assert.equal(calls, 1);
+});
+
+test("postPurgePaths: 一覧・記事・カテゴリ・JST 月別パスを重複なく作る", () => {
+  const paths = postPurgePaths([
+    {
+      slug: "2026/01/01/010000",
+      categories: ["日記", "tech"],
+      published_at: "2025-12-31T16:00:00Z", // JST で 2026-01-01 01:00
+    },
+    {
+      slug: "2026/01/01/010000",
+      categories: ["tech"],
+    },
+  ]);
+  assert.deepEqual(paths.sort(), [
+    "/",
+    "/archive",
+    "/archive/2026/1",
+    "/category",
+    "/category/%E6%97%A5%E8%A8%98",
+    "/category/tech",
+    "/entry/2026/01/01/010000",
+    "/rss.xml",
+  ]);
+});
+
+test("purgePaths: Cache API の delete と Zone Purge API の両方を呼ぶ", async () => {
+  const cache = memory();
+  await cache.put("https://x.test/", res(pub));
+  await cache.put("https://x.test/other", res(pub));
+
+  const calls: { url: string; body: string }[] = [];
+  const fakeFetch: typeof fetch = async (input, init) => {
+    calls.push({ url: String(input), body: String(init?.body ?? "") });
+    return new Response(JSON.stringify({ success: true }), { status: 200 });
+  };
+
+  await purgePaths("https://x.test", ["/", "/entry/a"], cache, { zoneId: "z1", token: "t1" }, fakeFetch);
+  assert.equal(cache.store.has("https://x.test/"), false);
+  assert.equal(cache.store.has("https://x.test/other"), true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://api.cloudflare.com/client/v4/zones/z1/purge_cache");
+  assert.deepEqual(JSON.parse(calls[0].body), { files: ["https://x.test/", "https://x.test/entry/a"] });
 });

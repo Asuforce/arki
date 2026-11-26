@@ -1,3 +1,4 @@
+mod api_cache;
 mod clef;
 mod images;
 mod tier;
@@ -673,6 +674,7 @@ async fn create_post(mut req: Request, ctx: RouteContext<()>) -> Result<Response
         .first(None)
         .await?;
     let id = created.map(|r| r.id).unwrap_or(0);
+    api_cache::bump_version(&d1).await;
     Response::from_json(&json!({ "id": id, "slug": slug, "updated_at": now }))
         .map(|r| r.with_status(201))
 }
@@ -795,6 +797,7 @@ async fn update_post(mut req: Request, ctx: RouteContext<()>) -> Result<Response
         return update_conflict(latest.map(|p| p.updated_at));
     }
 
+    api_cache::bump_version(&d1).await;
     Response::from_json(&json!({ "id": id, "slug": slug, "updated_at": updated_at }))
 }
 
@@ -821,6 +824,7 @@ async fn delete_post(req: Request, ctx: RouteContext<()>) -> Result<Response> {
             .bind(&[num(id)])?,
     ])
     .await?;
+    api_cache::bump_version(&d1).await;
     Ok(Response::empty()?.with_status(204))
 }
 
@@ -847,9 +851,23 @@ fn with_cors(mut response: Response, env: &Env) -> Result<Response> {
 }
 
 #[event(fetch)]
-pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Response> {
+pub async fn main(req: Request, env: Env, ctx: worker::Context) -> Result<Response> {
     // 認証つきの応答には下書きが入りうるので、前段のキャッシュに載せない
     let authenticated = req.headers().has("Authorization")?;
+    let url = req.url()?;
+    let cache_key = if api_cache::is_cacheable_route(&req.method(), url.path(), authenticated) {
+        let d1 = env.d1("DB")?;
+        let version = api_cache::read_version(&d1).await;
+        let key = api_cache::cache_key(&version, &url);
+        if let Ok(Some(cached)) = Cache::default().get(&key, false).await {
+            let hit = api_cache::hit_response(cached).await?;
+            return with_cors(hit, &env);
+        }
+        Some(key)
+    } else {
+        None
+    };
+
     let router = Router::new();
     let result = router
         .options("/*catchall", |_req, _ctx| {
@@ -879,6 +897,23 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
     let mut response = with_cors(response, &env)?;
     if authenticated {
         response.headers_mut().set("Cache-Control", "no-store")?;
+    } else if let Some(key) = cache_key {
+        if response.status_code() == 200 {
+            if let Ok(mut to_cache) = response.cloned() {
+                if to_cache
+                    .headers_mut()
+                    .set("Cache-Control", api_cache::INTERNAL_CACHE_CONTROL)
+                    .is_ok()
+                {
+                    ctx.wait_until(async move {
+                        let _ = Cache::default().put(&key, to_cache).await;
+                    });
+                }
+            }
+            let headers = response.headers_mut();
+            headers.set("Cache-Control", api_cache::PUBLIC_CACHE_CONTROL)?;
+            headers.set("X-Api-Cache", "MISS")?;
+        }
     }
     Ok(response)
 }

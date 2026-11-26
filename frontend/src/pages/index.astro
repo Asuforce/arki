@@ -3,11 +3,12 @@ import PostList from "../components/PostList.astro";
 import Pagination from "../components/Pagination.astro";
 import Layout from "../layouts/Layout.astro";
 import { listCategories, listPosts } from "../lib/api";
+import { PUBLIC_CACHE_CONTROL } from "../lib/edge-cache";
 import { siteTitle } from "../lib/site";
 
 const [{ posts, page, limit, total }, categories] = await Promise.all([listPosts({ page: 1 }), listCategories().catch(() => [])]);
 const topCategories = [...categories].sort((a, b) => b.count - a.count).slice(0, 8);
-Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
+Astro.response.headers.set("Cache-Control", PUBLIC_CACHE_CONTROL);
 ---
 
 <Layout>

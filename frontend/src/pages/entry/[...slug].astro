@@ -2,6 +2,7 @@
 import Layout from "../../layouts/Layout.astro";
 import { getPost } from "../../lib/api";
 import { expandLinkCards } from "../../lib/ogp";
+import { PUBLIC_CACHE_CONTROL } from "../../lib/edge-cache";
 import { renderPost } from "../../lib/render";
 import { formatDate } from "../../lib/site";
 
@@ -10,7 +11,7 @@ const post = slug ? await getPost(slug) : null;
 if (!post) return new Response("Not Found", { status: 404 });
 
 const html = await expandLinkCards(renderPost(post.content));
-Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=600");
+Astro.response.headers.set("Cache-Control", PUBLIC_CACHE_CONTROL);
 ---
 
 <Layout title={post.title} description={post.excerpt} type="article">
